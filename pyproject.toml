@@ -35,7 +35,8 @@ classifiers = [
 server = [
     "litestar[standard]",
     "hypercorn",
-    "piccolo[postgres,sqlite]"
+    "tinydb",
+    "pyhumps"
 ]
 client = [
     "click",

@@ -1,16 +1,9 @@
 import tomllib
-from typing import Literal
 from pydantic import BaseModel
-
-
-class DatabaseSqliteConfig(BaseModel):
-    engine: Literal["sqlite"]
-    path: str
 
 
 class StorageConfig(BaseModel):
     root: str
-    database: DatabaseSqliteConfig
 
 
 class ApiConfig(BaseModel):
