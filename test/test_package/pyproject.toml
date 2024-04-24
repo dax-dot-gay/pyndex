@@ -3,14 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pyndex"
+name = "pyndex_test"
 version = "0.0.1"
-dependencies = [
-    "twine",
-    "build",
-    "pydantic",
-    "httpx"
-]
+dependencies = []
 requires-python = ">=3.12"
 authors = [
   {name = "Dax Harris", email = "mvh3875@rit.edu"}
@@ -18,31 +13,16 @@ authors = [
 maintainers = [
   {name = "Dax Harris", email = "mvh3875@rit.edu"}
 ]
-description = "Self-hosted pypi-compatible package index with deep package access permissioning."
+description = "Pyndex test"
 readme = "README.md"
 license = {file = "LICENSE"}
-keywords = ["pypi", "packaging", "server", "cli", "self-hosted"]
+keywords = ["pyndex", "test"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python",
-  "Framework :: Pydantic :: 2",
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Internet :: WWW/HTTP :: HTTP Servers"
-]
-
-[project.optional-dependencies]
-server = [
-    "litestar[standard]",
-    "hypercorn",
-    "piccolo[postgres,sqlite]"
-]
-client = [
-    "click",
-    "rich",
-]
-test = [
-    "pytest"
 ]
 
 [project.urls]
