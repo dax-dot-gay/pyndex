@@ -1,15 +1,23 @@
 from typing import Annotated, Any
-from litestar import Litestar, post
-from litestar.params import Body
-from litestar.enums import RequestEncodingType
+from litestar import Litestar
+from litestar.datastructures import State
+from litestar.di import Provide
+from .models import CONTEXT, CONFIG
+from .config import Config
+from .context import Context
+from .routes import make_api_router
 
 
-@post("/")
-async def test_upload(
-    data: Annotated[Any, Body(media_type=RequestEncodingType.MULTI_PART)]
-) -> Any:
-    print(await data["content"].read())
-    return None
+async def on_start(app: Litestar):
+    app.state.context = CONTEXT
 
 
-app = Litestar(route_handlers=[test_upload])
+async def provide_context(state: State) -> Context:
+    return state.context
+
+
+app = Litestar(
+    route_handlers=[make_api_router(CONFIG.api.path_base)],
+    state=State({"context": None}),
+    dependencies={"context": Provide(provide_context)},
+)
