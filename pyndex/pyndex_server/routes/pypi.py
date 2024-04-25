@@ -2,7 +2,14 @@ import os
 from typing import Annotated
 from httpx import AsyncClient
 from litestar import Controller, post, get, Request
-from ..models import FileMetadata, Package, PackageList, PackageListItem, PackageDetail
+from ..models import (
+    FileMetadata,
+    Package,
+    PackageList,
+    PackageListItem,
+    PackageDetail,
+    APIMeta,
+)
 from ..context import Context
 from litestar.enums import RequestEncodingType
 from litestar.params import Body
@@ -30,7 +37,6 @@ class PypiController(Controller):
 
     @get(
         "/{project_name:str}",
-        content_media_type="application/vnd.pypi.simple.v1+json",
         response_headers={"Content-Type": "application/vnd.pypi.simple.v1+json"},
     )
     async def get_file_info(
@@ -54,3 +60,10 @@ class PypiController(Controller):
             context.root.joinpath("index", project_name), url_base=base_url
         )
         return package.detail(url_base=base_url)
+
+    @get("/", response_headers={"Content-Type": "application/vnd.pypi.simple.v1+json"})
+    async def get_file_list(self, context: Context) -> PackageList:
+        names = os.listdir(context.root.joinpath("index"))
+        return PackageList(
+            meta=APIMeta(), projects=[PackageListItem(name=name) for name in names]
+        )
