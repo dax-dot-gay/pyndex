@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 import json
 import os
 import pathlib
@@ -5,14 +6,20 @@ from typing import Optional
 from pydantic import BaseModel, Field, computed_field
 from litestar.datastructures import UploadFile
 
+FIELD_MAP = {
+    "project_url": "Project-URL",
+    "project_urls": "Project-URL",
+    "classifiers": "Classifier",
+}
+
 
 class FileMetadata(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
     metadata_version: str
     name: str
     version: str
-    platform: Optional[list[str]] = None
-    supported_platform: Optional[list[str]] = None
+    platform: Optional[list[str] | str] = None
+    supported_platform: Optional[list[str] | str] = None
     summary: Optional[str] = None
     description: Optional[str] = None
     description_content_type: Optional[str] = None
@@ -24,18 +31,19 @@ class FileMetadata(BaseModel):
     maintainer: Optional[str] = None
     maintainer_email: Optional[str] = None
     license: Optional[str] = None
-    classifiers: Optional[list[str]] = None
-    requires_dist: Optional[list[str]] = None
+    classifiers: Optional[list[str] | str] = None
+    requires_dist: Optional[list[str] | str] = None
     requires_python: Optional[str] = None
-    requires_external: Optional[list[str]] = None
-    project_urls: Optional[list[str]] = None
-    provides_dist: Optional[list[str]] = None
-    obsoletes_dist: Optional[list[str]] = None
-    provides: Optional[list[str]] = None
-    requires: Optional[list[str]] = None
-    obsoletes: Optional[list[str]] = None
+    requires_external: Optional[list[str] | str] = None
+    project_url: Optional[list[str] | str] = None
+    project_urls: Optional[list[str] | str] = None
+    provides_dist: Optional[list[str] | str] = None
+    obsoletes_dist: Optional[list[str] | str] = None
+    provides: Optional[list[str] | str] = None
+    requires: Optional[list[str] | str] = None
+    obsoletes: Optional[list[str] | str] = None
     comment: Optional[str] = None
-    action: str = Field(validation_alias=":action")
+    action: str = Field(validation_alias=":action", default="file_upload")
     protocol_version: int
     filetype: Optional[str] = None
     md5_digest: Optional[str] = None
@@ -44,10 +52,13 @@ class FileMetadata(BaseModel):
     pyversion: Optional[str] = None
     content: Optional[UploadFile] = Field(exclude=True, default=None)
     filename: Optional[str] = None
+    upload_time: datetime = None
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.filename = self.content.filename
+        if self.content:
+            self.filename = self.content.filename
+            self.upload_time = datetime.now(tz=UTC)
 
     @computed_field
     @property
@@ -80,19 +91,34 @@ class FileMetadata(BaseModel):
             file.write(self.model_dump_json())
 
     @classmethod
-    def get_files(cls, index: str, name: str, version: str) -> list["FileMetadata"]:
-        path = pathlib.Path(index, name, version)
-        if not path.exists():
-            raise FileNotFoundError(
-                f"No package exists meeting the constraint {name}:{version}"
-            )
+    def get_files(cls, path: str) -> list["FileMetadata"]:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Package directory '{path}' does not exist.")
 
-        names = [str(i) for i in path.iterdir()]
+        names = [str(i) for i in os.listdir(path)]
         results = []
         for name in names:
             if not name.endswith(".json"):
                 if name + ".json" in names:
-                    with open(name, "r") as f:
+                    with open(os.path.join(path, name + ".json"), "r") as f:
                         results.append(FileMetadata(**json.load(f)))
 
         return results
+
+    def as_metadata(self) -> str:
+        output = ""
+        for key, value in self.model_dump(
+            mode="json", exclude={"index_path", "metadata_path", "index_dir"}
+        ).items():
+            if value:
+                if key in FIELD_MAP.keys():
+                    field_name = FIELD_MAP[key]
+                else:
+                    field_name = key.title().replace("_", "-")
+
+                if type(value) == list:
+                    for i in value:
+                        output += field_name + ": " + i + "\n"
+                else:
+                    output += field_name + ": " + str(value) + "\n"
+        return output

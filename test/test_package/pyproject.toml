@@ -5,7 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "pyndex_test"
 version = "0.0.1"
-dependencies = []
+dependencies = [
+  "fastapi"
+]
 requires-python = ">=3.12"
 authors = [
   {name = "Dax Harris", email = "mvh3875@rit.edu"}

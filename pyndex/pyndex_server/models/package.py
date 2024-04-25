@@ -1,7 +1,9 @@
 from datetime import datetime
+import os
 from typing import Any, Optional
-from pydantic import BaseModel
-
+from pydantic import BaseModel, Field, computed_field, field_validator
+from .file_meta import FileMetadata
+from packaging.version import Version, parse
 
 class PackageInfo(BaseModel):
     author: Optional[str] = None
@@ -29,9 +31,15 @@ class PackageInfo(BaseModel):
     yanked: bool = False
     yanked_reason: Optional[str] = None
 
+    @field_validator("classifiers", "project_urls", "requires_dist", mode="before")
+    @classmethod
+    def ensure_list(cls, v: str | list[str]) -> list[str]:
+        if type(v) == str:
+            return [v]
+        return v
+
 
 class PackageDigests(BaseModel):
-    blake2b_256: Optional[str] = None
     md5: Optional[str] = None
     sha256: Optional[str] = None
 
@@ -41,16 +49,128 @@ class PackageUrl(BaseModel):
     digests: PackageDigests
     filename: str
     packagetype: str
-    python_version: str
+    python_version: str | None
     requires_python: Optional[str] = None
-    size: int
+    size: int | None = None
     upload_time: datetime
     url: str
     yanked: bool = False
     yanked_reason: Optional[str] = None
+
+    @computed_field
+    @property
+    def upload_time_iso_8601(self) -> str | None:
+        if self.upload_time:
+            return self.upload_time.isoformat(timespec="microseconds")
+        return None
+
+    @classmethod
+    def from_meta(cls, meta: FileMetadata, url_base: str) -> "PackageUrl":
+        return PackageUrl(
+            comment_text=meta.comment,
+            digests=PackageDigests(
+                md5=meta.md5_digest,
+                sha256=meta.sha256_digest,
+            ),
+            filename=meta.filename,
+            packagetype=meta.filetype,
+            python_version=meta.pyversion,
+            requires_python=meta.requires_python,
+            upload_time=meta.upload_time,
+            url=f"{url_base}/files/{meta.name}/{meta.version}/{meta.filename}",
+        )
+
+
+class APIMeta(BaseModel):
+    api_version: str = Field(serialization_alias="api-version", default="1.1")
+
+
+class PackageListItem(BaseModel):
+    name: str
+
+
+class PackageList(BaseModel):
+    meta: APIMeta
+    projects: list[PackageListItem]
+
+
+class PackageFileDetail(BaseModel):
+    filename: str
+    url: str
+    hashes: PackageDigests
+    requires_python: Optional[str] = Field(
+        serialization_alias="requires-python", default=None
+    )
+    dist_info_meta: Optional[bool | dict[str, str]] = Field(
+        serialization_alias="dist-info-metadata", default=None
+    )
+    gpg_sig: Optional[bool] = Field(serialization_alias="gpg-sig", default=None)
+    yanked: Optional[str | bool] = None
+
+    @classmethod
+    def from_meta(cls, meta: FileMetadata, url_base: str) -> "PackageFileDetail":
+        return PackageFileDetail(
+            filename=meta.filename,
+            url=f"{url_base}/files/{meta.name}/{meta.version}/{meta.filename}",
+            hashes=PackageDigests(
+                md5=meta.md5_digest,
+                sha256=meta.sha256_digest,
+            ),
+            requires_python=meta.requires_python,
+            dist_info_meta=True,
+        )
+
+
+class PackageDetail(BaseModel):
+    meta: APIMeta
+    name: str
+    files: list[PackageFileDetail]
 
 
 class Package(BaseModel):
     info: PackageInfo
     urls: list[PackageUrl]
     vulnerabilities: list[Any] = []
+    versions: list[tuple[str, list[FileMetadata]]]
+
+    @classmethod
+    def assemble_package(
+        cls,
+        package_path: str,
+        version: Optional[str] = None,
+        url_base: str = "http://localhost:8000",
+    ) -> "Package":
+        # Order version & select requested/latest
+        version_paths = {
+            ver: os.path.join(package_path, ver) for ver in os.listdir(package_path)
+        }
+        versions = {
+            ver: FileMetadata.get_files(path) for ver, path in version_paths.items()
+        }
+        ordered_versions = [
+            str(i)
+            for i in sorted([Version(ver) for ver in versions.keys()], reverse=True)
+        ]
+        if version:
+            if not version in versions.keys():
+                raise KeyError(f"Unknown version {version}")
+        else:
+            version = ordered_versions[0]
+
+        info = PackageInfo(**versions[version][0].model_dump())
+        urls = [PackageUrl.from_meta(meta, url_base) for meta in versions[version]]
+        return Package(
+            info=info,
+            urls=urls,
+            versions=[(version, versions[version]) for version in ordered_versions],
+        )
+
+    def detail(self, url_base: str = "http://localhost:8000") -> PackageDetail:
+        all_metas = []
+        for version, metas in self.versions:
+            all_metas.extend(metas)
+        return PackageDetail(
+            meta=APIMeta(),
+            name=self.info.name,
+            files=[PackageFileDetail.from_meta(ver, url_base) for ver in all_metas],
+        )
