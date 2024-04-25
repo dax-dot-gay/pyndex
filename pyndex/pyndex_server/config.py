@@ -11,12 +11,17 @@ class ApiConfig(BaseModel):
     path_base: str
 
 
+class ProxyItemUrls(BaseModel):
+    index: str
+    package: Optional[str] = None
+
+
 class ProxyItemConfig(BaseModel):
     name: str
     priority: int
-    url: str
     username: Optional[str] = None
     password: Optional[str] = None
+    urls: ProxyItemUrls
 
 
 class FeatureConfig(BaseModel):

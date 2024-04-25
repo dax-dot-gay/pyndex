@@ -40,11 +40,11 @@ class PypiController(Controller):
                 for proxy in context.config.proxies:
                     async with AsyncClient(follow_redirects=True) as client:
                         result = await client.get(
-                            proxy.url.rstrip("/") + "/" + project_name,
+                            proxy.urls.index.format(project_name=project_name),
                             headers={"Accept": "application/vnd.pypi.simple.v1+json"},
                         )
                         if result.is_success:
-                            return result.json()
+                            return PackageDetail(**result.json())
 
             raise NotFoundException(f"Unknown project {project_name}.")
 

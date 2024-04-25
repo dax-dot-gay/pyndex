@@ -33,9 +33,11 @@ class PackageInfo(BaseModel):
 
     @field_validator("classifiers", "project_urls", "requires_dist", mode="before")
     @classmethod
-    def ensure_list(cls, v: str | list[str]) -> list[str]:
+    def ensure_list(cls, v: str | list[str] | dict[str, str]) -> list[str]:
         if type(v) == str:
             return [v]
+        if type(v) == dict:
+            return [key + ": " + val for key, val in v.items()]
         return v
 
 
@@ -131,7 +133,8 @@ class Package(BaseModel):
     info: PackageInfo
     urls: list[PackageUrl]
     vulnerabilities: list[Any] = []
-    versions: list[tuple[str, list[FileMetadata]]]
+    versions: list[tuple[str, list[FileMetadata]]] = []
+    local: bool = True
 
     @classmethod
     def assemble_package(
