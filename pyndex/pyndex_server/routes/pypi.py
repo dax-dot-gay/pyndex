@@ -17,6 +17,7 @@ class PypiController(Controller):
         self,
         context: Context,
         data: Annotated[FileMetadata, Body(media_type=RequestEncodingType.MULTI_PART)],
+        request: Request,
     ) -> FileMetadata:
         try:
             await data.save(str(context.root.joinpath("index")))

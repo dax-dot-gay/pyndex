@@ -6,3 +6,5 @@ try:
     FEATURES.append("server")
 except ImportError:
     raise
+
+from .pyndex_api import PynDex
