@@ -11,11 +11,11 @@ TClass = TypeVar("TClass", bound="BaseObject")
 class BaseObject(BaseModel):
     _db: ClassVar[TinyDB | None] = None
     _collection: ClassVar[str | None] = None
-    id: str = Field(default_factory=lambda: uuid4())
+    id: str = Field(default_factory=lambda: uuid4().hex)
 
     @property
     def db(self) -> TinyDB:
-        if not self._db:
+        if self._db == None:
             raise RuntimeError("Database was not initialized")
 
         return self._db
@@ -39,6 +39,10 @@ class BaseObject(BaseModel):
         return humps.camelize(cls.__name__)
 
     @classmethod
+    def set_db(cls, db: TinyDB):
+        cls._db = db
+
+    @classmethod
     def get(cls: Type[TClass], id: str) -> TClass | None:
         return cls._db.table(cls._collection_name()).get(where("id") == id)
 
@@ -47,3 +51,8 @@ class BaseObject(BaseModel):
 
     def delete(self) -> None:
         self.table.remove(cond=where("id") == self.id)
+
+
+def initialize(db: TinyDB, objs: list[Type[BaseObject]]):
+    for i in objs:
+        i.set_db(db)

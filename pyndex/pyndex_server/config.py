@@ -26,6 +26,17 @@ class ProxyItemConfig(BaseModel):
 
 class FeatureConfig(BaseModel):
     proxy: bool = True
+    auth: bool = True
+
+
+class AuthAdminConfig(BaseModel):
+    username: str
+    password: str
+    enabled: bool = True
+
+
+class AuthenticationConfig(BaseModel):
+    admin: AuthAdminConfig | None = None
 
 
 class Config(BaseModel):
@@ -33,6 +44,7 @@ class Config(BaseModel):
     api: ApiConfig
     proxy: dict[str, ProxyItemConfig] = {}
     features: FeatureConfig = Field(default_factory=FeatureConfig)
+    auth: AuthenticationConfig
 
     @classmethod
     def load(cls) -> "Config":
