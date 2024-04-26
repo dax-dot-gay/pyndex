@@ -2,6 +2,7 @@ import os
 import click
 import platformdirs
 from .models import *
+from .commands import *
 
 
 @click.group(invoke_without_command=True)
@@ -27,7 +28,7 @@ from .models import *
     help="Pyndex instance name to override configured default.",
 )
 @click.pass_context
-def main(ctx: click.Context, config: str | None, verbose: int):
+def main(ctx: click.Context, config: str | None, verbose: int, repo: str):
     if config:
         config_path = config
     else:
@@ -36,7 +37,13 @@ def main(ctx: click.Context, config: str | None, verbose: int):
         )
 
     if not os.path.exists(config_path):
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
         PyndexConfig().save(config_path)
 
     cfg = PyndexConfig.from_file(config_path)
-    ctx.obj = Context(verbosity=verbose, config_file_path=config_path, config=cfg)
+    ctx.obj = Context(
+        verbosity=verbose, config_file_path=config_path, config=cfg, repo_override=repo
+    )
+
+
+main.add_command(connection)
