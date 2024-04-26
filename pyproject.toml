@@ -10,7 +10,8 @@ dependencies = [
     "build",
     "pydantic",
     "httpx",
-    "validators"
+    "validators",
+    "tomlkit"
 ]
 requires-python = ">=3.12"
 authors = [
@@ -42,6 +43,7 @@ server = [
 client = [
     "click",
     "rich",
+    "platformdirs"
 ]
 test = [
     "pytest"

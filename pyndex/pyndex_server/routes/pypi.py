@@ -40,10 +40,10 @@ class PypiController(Controller):
         response_headers={"Content-Type": "application/vnd.pypi.simple.v1+json"},
     )
     async def get_file_info(
-        self, context: Context, project_name: str, request: Request
+        self, context: Context, project_name: str, request: Request, local: bool = False
     ) -> PackageDetail:
         if not os.path.exists(context.root.joinpath("index", project_name)):
-            if len(context.config.proxies) > 0:
+            if len(context.config.proxies) > 0 and not local:
                 for proxy in context.config.proxies:
                     async with AsyncClient(follow_redirects=True) as client:
                         result = await client.get(

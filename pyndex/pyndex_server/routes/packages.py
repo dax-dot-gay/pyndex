@@ -44,7 +44,8 @@ class PackagesController(Controller):
     ) -> Package:
         try:
             return Package.assemble_package(
-                context.root.joinpath("index", project_name, version),
+                context.root.joinpath("index", project_name),
+                version=version,
                 url_base=request.base_url,
             )
         except FileNotFoundError:
@@ -60,3 +61,5 @@ class PackagesController(Controller):
                             if result.is_success:
                                 return Package(**result.json(), local=False)
             raise NotFoundException("Unknown package.")
+        except KeyError:
+            raise NotFoundException(f"Unknown version {version}")
