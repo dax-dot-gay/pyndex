@@ -1,6 +1,7 @@
 import logging
 import os
-from typing import Any, Callable, cast
+from typing import Any, Callable, Literal, cast
+from pydantic import BaseModel
 from twine.commands.upload import skip_upload, _make_package
 from requests.models import Response as Response
 from twine.package import PackageFile
@@ -11,6 +12,21 @@ from twine import commands, exceptions, utils
 import requests_toolbelt
 
 logger = logging.getLogger("pyndex")
+
+
+class ProgressUpdate_Upload(BaseModel):
+    action: Literal["upload"] = "upload"
+    filename: str
+    completed: int
+    total: int
+
+
+class ProgressUpdate_Start(BaseModel):
+    action: Literal["start"] = "start"
+    filename: str
+
+
+ProgressUpdate = ProgressUpdate_Start | ProgressUpdate_Upload
 
 
 class WrappedRepo(Repository):
@@ -41,6 +57,7 @@ class WrappedRepo(Repository):
         Returns:
             Response: Response info
         """
+        self.settings.on_progress(ProgressUpdate_Start(filename=package.basefilename))
         data = package.metadata_dictionary()
         data.update(
             {
@@ -60,7 +77,13 @@ class WrappedRepo(Repository):
             total = encoder.len
             monitor = requests_toolbelt.MultipartEncoderMonitor(
                 encoder,
-                lambda monitor: self.settings.on_progress(monitor.bytes_read, total),
+                lambda monitor: self.settings.on_progress(
+                    ProgressUpdate_Upload(
+                        filename=package.basefilename,
+                        completed=monitor.bytes_read,
+                        total=total,
+                    )
+                ),
             )
 
             resp = self.session.post(
@@ -74,6 +97,7 @@ class WrappedRepo(Repository):
 
 
 class WrappedSettings(Settings):
+
     def __init__(
         self,
         *,
@@ -92,13 +116,13 @@ class WrappedSettings(Settings):
         repository_url: str | None = None,
         verbose: bool = False,
         disable_progress_bar: bool = False,
-        progress_callback: Callable | None = None,
+        progress_callback: Callable[[ProgressUpdate], None] | None = None,
         **ignored_kwargs: Any,
     ) -> None:
         """WrappedSettings initializer
 
         Args:
-            progress_callback (Callable | None, optional): Callback to call on upload progress. Defaults to None.
+            progress_callback (Callable[[ProgressUpdate], None] | None, optional): Callback to call on upload progress. Defaults to None.
             **kwargs (Any, Optional): All other kwargs are passed to Settings.
         """
         super().__init__(
@@ -121,15 +145,14 @@ class WrappedSettings(Settings):
         )
         self.progress_callback = progress_callback
 
-    def on_progress(self, completed: int, total: int) -> None:
+    def on_progress(self, update: ProgressUpdate) -> None:
         """Wrapper function that is a no-op if a callback is not defined.
 
         Args:
-            completed (int): Amount of upload completed
-            total (int): Total upload size
+            update (ProgressUpdate): Update passed to callback
         """
         if self.progress_callback:
-            self.progress_callback(completed, total)
+            self.progress_callback(update)
 
     def create_repository(self) -> "WrappedRepo":
         """Wraps Settings.create_repository() to add callback passing
@@ -150,7 +173,7 @@ class WrappedSettings(Settings):
 
 def upload(
     *dists: str,
-    progress_callback: Callable | None = None,
+    progress_callback: Callable[[ProgressUpdate], None] | None = None,
     repository_name: str | None = None,
     repository_url: str | None = None,
     username: str = "",
@@ -161,7 +184,7 @@ def upload(
 
     Args:
         *dists (str): Any number of paths/globs to upload (ie "dist/*").
-        progress_callback (Callable | None, optional): A callback to call on upload progress. Should take two arguments, (complete: int, total: int). Defaults to None.
+        progress_callback (Callable[[ProgressUpdate], None] | None, optional): A callback to call on upload progress. Takes one positional argument, a ProgressUpdate with update info. Defaults to None.
         repository_name (str | None, optional): Repo name to upload to (as defined in .pypirc). Defaults to None.
         repository_url (str | None, optional): Repo URL to upload to (ie https://upload.pypi.org). Defaults to None.
         username (str, optional): Index username, if required. Defaults to "".
