@@ -1,3 +1,4 @@
+import json
 from pydantic import BaseModel, field_serializer, field_validator
 import tomlkit
 
@@ -45,7 +46,7 @@ class PyndexConfig(BaseModel):
     @classmethod
     def from_file(cls, path: str) -> "PyndexConfig":
         with open(path, "rb") as f:
-            return PyndexConfig(**tomlkit.load(f))
+            return PyndexConfig(**json.loads(json.dumps(tomlkit.load(f))))
 
     def save(self, path: str):
         with open(path, "w") as f:

@@ -1,12 +1,28 @@
 import click
 from ..models import *
+from pyndex.common import Pyndex
 import urllib.parse
 
 
-@click.group("connection")
-@click.pass_obj
-def connection(obj: Context):
-    pass
+@click.group("connection", invoke_without_command=True)
+@click.pass_context
+def connection(ctx: click.Context):
+    if ctx.invoked_subcommand == None:
+        context: Context = ctx.obj
+        if context.repo:
+            context.console.print(
+                f"[green][bold]Active Connection:[/bold] {context.repo.name} @ {context.repo.url}"
+            )
+
+            with context.index() as index:
+                if index.user:
+                    context.console.print(
+                        f"[green][bold]Active User:[/bold] {index.user.name if index.user.name else 'anonymous'}"
+                    )
+                else:
+                    context.console.print(
+                        f"[red][bold]Error:[/bold] Attempt to login to {context.repo.name} as {context.repo.username} failed/"
+                    )
 
 
 @connection.command("add")
@@ -65,6 +81,16 @@ def add_connection(
 
     if not name:
         name = urllib.parse.urlparse(url).hostname
+
+    with Pyndex(url, username=username, password=password, token=token) as index:
+        user = index.user
+        if not user:
+            obj.console.print(
+                "[red][bold]Error:[/bold] Invalid credentials supplied.[/red]"
+            )
+            raise click.Abort()
+
+        obj.console.print(f"Connected as {user.name}. Saving connection as {name}...")
 
     index = PyndexIndex(
         name=name, url=url, username=username, password=password, token=token

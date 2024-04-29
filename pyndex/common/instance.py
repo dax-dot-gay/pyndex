@@ -1,5 +1,7 @@
+from functools import cached_property
 from typing import Callable
 from httpx import Client
+import httpx
 from .models import *
 from .wrappers import upload, ProgressUpdate
 
@@ -37,12 +39,19 @@ class Pyndex:
         self.client = None
 
     def __enter__(self) -> "Pyndex":
-        self.client = Client()
+        self.client = Client(auth=httpx.BasicAuth(self.username, self.password))
         return self
 
     def __exit__(self, *args, **kwargs):
         if self.client:
             self.client.close()
+
+    @cached_property
+    def user(self) -> RedactedAuth | None:
+        result = self.client.get(self.url("/meta/users/me"))
+        if result.is_success:
+            return RedactedAuth(**result.json())
+        return None
 
     def url(self, endpoint: str) -> str:
         """Generates a formatted URL from the base URL and an endpoint

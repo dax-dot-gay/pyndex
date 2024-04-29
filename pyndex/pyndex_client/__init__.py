@@ -1,8 +1,11 @@
+import logging
 import os
 import click
 import platformdirs
 from .models import *
 from .commands import *
+
+logging.getLogger("httpx").disabled = True
 
 
 @click.group(invoke_without_command=True)
@@ -42,7 +45,11 @@ def main(ctx: click.Context, config: str | None, verbose: int, repo: str):
 
     cfg = PyndexConfig.from_file(config_path)
     ctx.obj = Context(
-        verbosity=verbose, config_file_path=config_path, config=cfg, repo_override=repo
+        verbosity=verbose,
+        config_file_path=config_path,
+        config=cfg,
+        repo_override=repo,
+        console=rich.console.Console(),
     )
 
 
