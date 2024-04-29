@@ -7,6 +7,7 @@ import urllib.parse
 @click.group("connection", invoke_without_command=True)
 @click.pass_context
 def connection(ctx: click.Context):
+    """Contains commands pertaining to the active connection. When invoked alone, prints out information about the currently active connection."""
     if ctx.invoked_subcommand == None:
         context: Context = ctx.obj
         if context.repo:
@@ -21,8 +22,10 @@ def connection(ctx: click.Context):
                     )
                 else:
                     context.console.print(
-                        f"[red][bold]Error:[/bold] Attempt to login to {context.repo.name} as {context.repo.username} failed/"
+                        f"[red][bold]Error:[/bold] Attempt to login to {context.repo.name} as {context.repo.username} failed"
                     )
+        else:
+            context.console.print(f"[red]No active connection.")
 
 
 @connection.command("add")
@@ -99,4 +102,21 @@ def add_connection(
     if default or not obj.config.default:
         obj.config.default = name
 
+    obj.config.save(obj.config_file_path)
+
+
+@connection.command("rm")
+@click.argument("name", type=str)
+@click.pass_obj
+def remove_connection(obj: Context, name: str):
+    """Removes a connection from the local configuration"""
+
+    if not name in obj.config.index.keys():
+        obj.console.print("[red][bold]Error:[/bold] Unknown index name[/red]")
+        raise click.Abort()
+
+    if obj.config.default == name:
+        obj.config.default = None
+
+    del obj.config.index[name]
     obj.config.save(obj.config_file_path)
