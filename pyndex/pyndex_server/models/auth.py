@@ -1,24 +1,24 @@
 from hashlib import pbkdf2_hmac
 import os
 from secrets import token_urlsafe
-from typing import Literal
+from typing import Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 from tinydb import where
 from .base import BaseObject
 
 
 class AuthAdmin(BaseModel):
     type: Literal["admin"] = "admin"
-    username: str
+    username: str | None = None
 
 
 class AuthUser(BaseObject):
     _collection = "creds"
     type: Literal["user"] = "user"
-    username: str
-    password_hash: str | None
-    password_salt: str | None
+    username: str | None = None
+    password_hash: str | None = None
+    password_salt: str | None = None
     groups: list[str] = []
 
     @classmethod
@@ -60,10 +60,11 @@ class AuthGroup(BaseObject):
 
 class AuthToken(BaseObject):
     _collection = "creds"
-    token: str = Field(default_factory=lambda: token_urlsafe())
+    token: str | None = Field(default_factory=lambda: token_urlsafe())
     type: Literal["token"] = "token"
     linked_user: str | None = None
     description: str | None = None
+    groups: list[str] = []
 
     @classmethod
     def from_token(cls, token: str) -> "AuthToken | None":

@@ -5,6 +5,7 @@ from litestar.di import Provide
 from .pypi import PypiController
 from .files import FilesController
 from .packages import PackagesController
+from .meta import *
 from ..context import Context
 from ..models import AuthUser, AuthToken, AuthAdmin
 from litestar.connection import ASGIConnection
@@ -80,7 +81,7 @@ async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -
 
 async def provide_authentication(
     request: Request, context: Context
-) -> AuthToken | AuthUser | AuthAdmin | None:
+) -> AuthUser | AuthToken | AuthAdmin | None:
     auth = request.headers.get("authorization")
     if auth == None:
         return None
@@ -107,7 +108,6 @@ async def provide_authentication(
         result = AuthToken.from_token(password)
         if not result:
             raise NotAuthorizedException("Invalid API token provided")
-
         return result
 
     else:
@@ -125,14 +125,18 @@ async def provide_authentication(
 
         if not result.verify(password):
             raise NotAuthorizedException("Invalid username or password")
-
         return result
 
 
 def make_api_router(base: str) -> Router:
     return Router(
         base,
-        route_handlers=[PypiController, FilesController, PackagesController],
+        route_handlers=[
+            PypiController,
+            FilesController,
+            PackagesController,
+            MetaUserController,
+        ],
         guards=[guard_authenticated],
         dependencies={"auth": Provide(provide_authentication)},
     )
