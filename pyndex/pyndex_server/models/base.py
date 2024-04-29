@@ -1,7 +1,7 @@
 from typing import ClassVar, Type, TypeVar
 from uuid import uuid4
 from pydantic import BaseModel, Field
-from tinydb import TinyDB, where
+from tinydb import Query, TinyDB, where
 from tinydb.table import Table
 import humps
 
@@ -43,8 +43,22 @@ class BaseObject(BaseModel):
         cls._db = db
 
     @classmethod
+    def find(cls: Type[TClass], query: Query) -> list[TClass]:
+        return [cls(**i) for i in cls._db.table(cls._collection_name()).search(query)]
+
+    @classmethod
+    def find_one(cls: Type[TClass], query: Query) -> TClass | None:
+        result = cls._db.table(cls._collection_name()).search(query)
+        return cls(**result[0]) if len(result) > 0 else None
+
+    @classmethod
     def get(cls: Type[TClass], id: str) -> TClass | None:
-        return cls._db.table(cls._collection_name()).get(where("id") == id)
+        result = cls._db.table(cls._collection_name()).get(where("id") == id)
+        return cls(**result) if result else None
+
+    @classmethod
+    def exists(cls: Type[TClass], query: Query) -> bool:
+        return cls._db.table(cls._collection_name()).contains(where("id") == id)
 
     def save(self) -> None:
         self.table.upsert(self.model_dump(mode="json"), cond=where("id") == self.id)
