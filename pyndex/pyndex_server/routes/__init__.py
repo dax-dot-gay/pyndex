@@ -16,12 +16,16 @@ async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -
     context: Context = connection.app.state.context
     if context.config.features.auth:
         if not connection.headers.get("authorization", None):
-            raise NotAuthorizedException("This endpoint requires authentication.")
+            raise NotAuthorizedException(
+                "This endpoint requires authentication.",
+                headers={"WWW-Authenticate": "Basic"},
+            )
 
         mode, encoded = connection.headers["authorization"].split(" ", maxsplit=1)
         if mode.lower() != "basic":
-            raise ClientException(
-                f"Incompatible authentication type {mode}. Only Basic is supported to maximize PEP compliance."
+            raise NotAuthorizedException(
+                f"Incompatible authentication type {mode}. Only Basic is supported to maximize PEP compliance.",
+                headers={"WWW-Authenticate": "Basic"},
             )
 
         try:
@@ -31,15 +35,22 @@ async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -
 
         username, password = decoded.split(":", maxsplit=1)
         if len(username) == 0:
-            raise ClientException("A username must be provided")
+            raise NotAuthorizedException(
+                "A username must be provided", headers={"WWW-Authenticate": "Basic"}
+            )
 
         if username == "_token_":
             if not password:
-                raise ClientException("An API token was not provided")
+                raise NotAuthorizedException(
+                    "An API token was not provided",
+                    headers={"WWW-Authenticate": "Basic"},
+                )
 
             result = AuthToken.from_token(password)
             if not result:
-                raise NotAuthorizedException("Invalid API token provided")
+                raise NotAuthorizedException(
+                    "Invalid API token provided", headers={"WWW-Authenticate": "Basic"}
+                )
 
         else:
             if (
@@ -47,15 +58,24 @@ async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -
                 and context.config.auth.admin.enabled
             ):
                 if password != context.config.auth.admin.password:
-                    raise NotAuthorizedException("Invalid username or password")
+                    raise NotAuthorizedException(
+                        "Invalid username or password",
+                        headers={"WWW-Authenticate": "Basic"},
+                    )
                 return
 
             result = AuthUser.from_username(username)
             if not result:
-                raise NotAuthorizedException("Invalid username or password")
+                raise NotAuthorizedException(
+                    "Invalid username or password",
+                    headers={"WWW-Authenticate": "Basic"},
+                )
 
             if not result.verify(password):
-                raise NotAuthorizedException("Invalid username or password")
+                raise NotAuthorizedException(
+                    "Invalid username or password",
+                    headers={"WWW-Authenticate": "Basic"},
+                )
 
 
 async def provide_authentication(
