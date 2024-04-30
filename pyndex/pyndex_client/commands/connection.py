@@ -109,7 +109,7 @@ def add_connection(
 @click.argument("name", type=str)
 @click.pass_obj
 def remove_connection(obj: Context, name: str):
-    """Removes a connection from the local configuration"""
+    """Removes the connection called NAME from the local configuration"""
 
     if not name in obj.config.index.keys():
         obj.console.print("[red][bold]Error:[/bold] Unknown index name[/red]")
@@ -119,4 +119,16 @@ def remove_connection(obj: Context, name: str):
         obj.config.default = None
 
     del obj.config.index[name]
+    obj.config.save(obj.config_file_path)
+
+
+@connection.command("set")
+@click.argument("name", type=str)
+@click.pass_obj
+def set_default_connection(obj: Context, name: str):
+    """Sets connection NAME as the default"""
+    if not name in obj.config.index.keys():
+        obj.console.print("[red][bold]Error:[/bold] Unknown index name[/red]")
+        raise click.Abort()
+    obj.config.default = name
     obj.config.save(obj.config_file_path)
