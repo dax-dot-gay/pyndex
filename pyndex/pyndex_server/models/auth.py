@@ -1,19 +1,45 @@
+from functools import cached_property
 from hashlib import pbkdf2_hmac
 import os
 from secrets import token_urlsafe
-from typing import Literal, Union
+from typing import Literal
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field
 from tinydb import where
 from .base import BaseObject
 
+PERMISSION = Literal["meta.admin", "repo.admin", "repo.edit", "repo.view"]
 
-class AuthAdmin(BaseModel):
+
+class AuthBase:
+    def permissions(self, project: str | None = None) -> list["AuthPermission"]:
+        return AuthPermission.get_permissions(self, project=project)
+
+    @cached_property
+    def is_admin(self) -> bool:
+        return any([i.permission == "meta.admin" for i in self.permissions()])
+
+    def check_access(self, project: str) -> PERMISSION | None:
+        results = self.permissions(project=project)
+        if len(results) == 0:
+            return None
+
+        bare = [i.permissions for i in results]
+        if "repo.admin" in bare:
+            return "repo.admin"
+        elif "repo.edit" in bare:
+            return "repo.edit"
+        elif "repo.view" in bare:
+            return "repo.view"
+        return None
+
+
+class AuthAdmin(BaseModel, AuthBase):
     type: Literal["admin"] = "admin"
     username: str | None = None
 
 
-class AuthUser(BaseObject):
+class AuthUser(BaseObject, AuthBase):
     _collection = "creds"
     type: Literal["user"] = "user"
     username: str | None = None
@@ -52,13 +78,13 @@ class AuthUser(BaseObject):
         return cls.find_one(where("username") == username)
 
 
-class AuthGroup(BaseObject):
+class AuthGroup(BaseObject, AuthBase):
     _collection = "groups"
     name: str
     display_name: str | None = None
 
 
-class AuthToken(BaseObject):
+class AuthToken(BaseObject, AuthBase):
     _collection = "creds"
     token: str | None = Field(default_factory=lambda: token_urlsafe())
     type: Literal["token"] = "token"
@@ -69,3 +95,51 @@ class AuthToken(BaseObject):
     @classmethod
     def from_token(cls, token: str) -> "AuthToken | None":
         return cls.find_one(where("token") == token)
+
+
+class AuthPermission(BaseObject):
+    _collection = "permissions"
+    permission: PERMISSION
+    target_type: Literal["group", "auth"]
+    target_id: str
+    project: str | None = None
+
+    @classmethod
+    def get_permissions(
+        cls,
+        target: AuthAdmin | AuthUser | AuthToken | AuthGroup | None,
+        project: str | None = None,
+    ) -> list["AuthPermission"]:
+        if target == None:
+            return []
+
+        if isinstance(target, AuthGroup):
+            target_type = "group"
+            target_id = target.id
+        else:
+            target_type = "auth"
+            target_id = target.id
+
+        if project:
+            results = AuthPermission.find(
+                (where("target_type") == target_type)
+                & (where("target_id") == target_id)
+                & (where("project") == project)
+            )
+        else:
+            results = AuthPermission.find(
+                (where("target_type") == target_type)
+                & (where("target_id") == target_id)
+            )
+
+        if isinstance(target, AuthAdmin):
+            results.append(
+                AuthPermission(
+                    id="_admin",
+                    permission="meta.admin",
+                    target_type="auth",
+                    target_id="_admin",
+                    project=project,
+                )
+            )
+        return results
