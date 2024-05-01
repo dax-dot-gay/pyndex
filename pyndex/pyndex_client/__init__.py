@@ -4,11 +4,12 @@ import click
 import platformdirs
 from .models import *
 from .commands import *
+from .util import *
 
 logging.getLogger("httpx").disabled = True
 
 
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True, cls=AliasResolver)
 @click.option(
     "--config",
     "-c",

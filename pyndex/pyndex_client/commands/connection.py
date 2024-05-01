@@ -2,9 +2,10 @@ import click
 from ..models import *
 from pyndex.common import Pyndex
 import urllib.parse
+from ..util import AliasResolver
 
 
-@click.group("connection", invoke_without_command=True)
+@click.group("connection", invoke_without_command=True, cls=AliasResolver)
 @click.pass_context
 def connection(ctx: click.Context):
     """Contains commands pertaining to the active connection. When invoked alone, prints out information about the currently active connection."""
