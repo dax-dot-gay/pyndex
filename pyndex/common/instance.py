@@ -173,3 +173,13 @@ class Pyndex:
             return [RedactedAuth(**i) for i in result.json()]
         else:
             raise ApiError(response=result)
+
+    def create_group(self, name: str, display_name: str | None = None) -> AuthGroup:
+        result = self.client.post(
+            self.url("/meta/admin/group"),
+            json={"name": name, "display_name": display_name},
+        )
+        if result.is_success:
+            return AuthGroup(**result.json())
+        else:
+            raise ApiError(response=result)

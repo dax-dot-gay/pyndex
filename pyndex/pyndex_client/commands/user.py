@@ -1,4 +1,3 @@
-from httpx import HTTPError
 from ..util import AliasResolver
 from ..models import Context
 from pyndex.common import ApiError
@@ -88,3 +87,31 @@ def list_users(obj: Context):
             obj.console.print(
                 f"    [bold]Groups:[/bold] {', '.join([(i.display_name + '(' + i.name + ')') if i.display_name else i for i in user.groups])}\n"
             )
+
+
+@user.group("modify", cls=AliasResolver)
+@click.argument("username")
+@click.pass_context
+def modify_user(username: str, ctx: click.Context):
+    """Modifies user specified by USERNAME"""
+    pass
+
+
+@modify_user.command("add-group")
+@click.option(
+    "--group",
+    "-g",
+    "group",
+    multiple=True,
+    help="The name of a group to add this user to. Can be specified multiple times.",
+)
+@click.pass_context
+def add_groups(ctx: click.Context, group: list[str]):
+    username = ctx.parent.params["username"]
+    context: Context = ctx.obj
+    with context.index() as index:
+        if not index.admin:
+            context.console.print(
+                "[bold red]Error:[/bold red]\t Active user does not have the `meta.admin` permission for this connection."
+            )
+            raise click.Abort()

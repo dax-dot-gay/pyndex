@@ -94,6 +94,7 @@ def make_api_router(base: str) -> Router:
             PackagesController,
             MetaUserController,
             MetaAdminController,
+            MetaGroupController,
         ],
         guards=[guard_authenticated],
         dependencies={"auth": Provide(provide_authentication)},

@@ -131,19 +131,18 @@ class MetaAdminController(Controller):
         return RedactedAuth.from_auth(created)
 
     @post("/user/{user_id:str}/groups")
-    async def add_user_to_group(
-        self, user_id: str, data: dict[Literal["group"] : str]
-    ) -> RedactedAuth:
+    async def add_user_to_group(self, user_id: str, data: list[str]) -> RedactedAuth:
         user = AuthUser.get(user_id)
         if not user:
             raise NotFoundException("User ID not found")
 
-        group = AuthGroup.get(data["group"])
-        if not group:
-            raise NotFoundException("Group ID not found")
+        for group_name in data:
+            group = AuthGroup.find_one(where("name") == group_name)
+            if not group:
+                raise NotFoundException(f"Group `{group_name}` not found")
 
-        if not group.id in user.groups:
-            user.groups.append(group.id)
+            if not group.id in user.groups:
+                user.groups.append(group.id)
 
         user.save()
         return RedactedAuth.from_auth(user)
@@ -156,3 +155,29 @@ class MetaAdminController(Controller):
         created = AuthGroup(name=data.name, display_name=data.display_name)
         created.save()
         return created
+
+
+class MetaGroupController(Controller):
+    path = "/meta/groups"
+    guards = [guard_auth_enabled]
+
+    @get("/")
+    async def list_groups(self) -> list[AuthGroup]:
+        return AuthGroup.all()
+
+    @get("/{id:str}")
+    async def get_group(self, id: str) -> AuthGroup:
+        result = AuthGroup.get(id)
+        if result:
+            return result
+        raise NotFoundException("Group ID not found")
+
+    @get("/{id:str}/members")
+    async def get_group_members(self, id: str) -> list[RedactedAuth]:
+        return [
+            RedactedAuth.from_auth(i)
+            for i in [
+                *AuthUser.find(where("groups").test(lambda groups: id in groups)),
+                *AuthToken.find(where("groups").test(lambda groups: id in groups)),
+            ]
+        ]
