@@ -43,6 +43,10 @@ class AuthAdmin(BaseModel, AuthBase):
     type: Literal["admin"] = "admin"
     username: str | None = None
 
+    @property
+    def id(self) -> str:
+        return "_admin"
+
 
 class AuthUser(BaseObject, AuthBase):
     _collection = "creds"

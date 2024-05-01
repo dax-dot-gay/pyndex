@@ -97,6 +97,10 @@ class MetaUserController(Controller):
 
         raise NotFoundException(f"User with username {username} does not exist.")
 
+    @get("/me/admin")
+    async def get_is_admin(self, auth: Any) -> bool:
+        return auth.is_admin if auth else False
+
 
 class UserCreationModel(BaseModel):
     username: str
@@ -113,8 +117,13 @@ class MetaAdminController(Controller):
     guards = [guard_admin, guard_auth_enabled]
 
     @post("/user")
-    async def create_user(self, data: UserCreationModel) -> RedactedAuth:
-        if AuthUser.exists(where("username") == data.username):
+    async def create_user(
+        self, data: UserCreationModel, context: Context
+    ) -> RedactedAuth:
+        if (
+            AuthUser.exists(where("username") == data.username)
+            or data.username == context.config.auth.admin.username
+        ):
             raise MethodNotAllowedException("User already exists.")
 
         created = AuthUser.create(data.username, password=data.password)

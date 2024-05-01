@@ -1,9 +1,25 @@
 from functools import cached_property
 from typing import Callable
-from httpx import Client
+from unittest import result
+from httpx import Client, Response
 import httpx
 from .models import *
 from .wrappers import upload, ProgressUpdate
+
+
+class ApiError(RuntimeError):
+    def __init__(self, *args: object, response: Response | None = None) -> None:
+        super().__init__(*args)
+        self.response = response
+        self.content = self.response.json() if self.response else {}
+
+    @property
+    def code(self) -> int:
+        return self.response.status_code if self.response else 0
+
+    @property
+    def reason(self) -> str | None:
+        return self.content.get("detail")
 
 
 class Pyndex:
@@ -133,3 +149,27 @@ class Pyndex:
             username=self.username,
             password=self.password,
         )
+
+    @cached_property
+    def admin(self) -> bool:
+        result = self.client.get(self.url("/meta/users/me/admin"))
+        if result.is_success:
+            return result.json()
+        return False
+
+    def create_user(self, username: str, password: str | None = None) -> RedactedAuth:
+        result = self.client.post(
+            self.url("/meta/admin/user"),
+            json={"username": username, "password": password},
+        )
+        if result.is_success:
+            return RedactedAuth(**result.json())
+        else:
+            raise ApiError(response=result)
+
+    def get_users(self) -> list[RedactedAuth]:
+        result = self.client.get(self.url("/meta/users"))
+        if result.is_success:
+            return [RedactedAuth(**i) for i in result.json()]
+        else:
+            raise ApiError(response=result)
