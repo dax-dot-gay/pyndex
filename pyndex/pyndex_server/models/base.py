@@ -58,7 +58,11 @@ class BaseObject(BaseModel):
 
     @classmethod
     def exists(cls: Type[TClass], query: Query) -> bool:
-        return cls._db.table(cls._collection_name()).contains(where("id") == id)
+        return cls._db.table(cls._collection_name()).contains(query)
+
+    @classmethod
+    def all(cls: Type[TClass]) -> list[TClass]:
+        return [cls(**i) for i in cls._db.table(cls._collection_name()).all()]
 
     def save(self) -> None:
         self.table.upsert(self.model_dump(mode="json"), cond=where("id") == self.id)

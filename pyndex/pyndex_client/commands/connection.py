@@ -13,17 +13,17 @@ def connection(ctx: click.Context):
         context: Context = ctx.obj
         if context.repo:
             context.console.print(
-                f"[green][bold]Active Connection:[/bold] {context.repo.name} @ {context.repo.url}"
+                f"[green][bold]Active Connection:[/bold][/green]\t{context.repo.name} @ {context.repo.url}"
             )
 
             with context.index() as index:
                 if index.user:
                     context.console.print(
-                        f"[green][bold]Active User:[/bold] {index.user.name if index.user.name else 'anonymous'}"
+                        f"[green][bold]Active User:[/bold][/green]\t\t{index.user.name if index.user.name else 'anonymous'}"
                     )
                 else:
                     context.console.print(
-                        f"[red][bold]Error:[/bold] Attempt to login to {context.repo.name} as {context.repo.username} failed"
+                        f"[red][bold]Error:[/bold]\t\tAttempt to login to {context.repo.name} as {context.repo.username} failed"
                     )
         else:
             context.console.print(f"[red]No active connection.")

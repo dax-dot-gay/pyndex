@@ -2,6 +2,10 @@ from typing import Any, Literal, Type
 from litestar import Controller, get
 from pydantic import BaseModel
 from ..models import AuthAdmin, AuthUser, AuthToken
+from ..context import Context
+from litestar.connection import ASGIConnection
+from litestar.exceptions import *
+from litestar.handlers.base import BaseRouteHandler
 
 
 class RedactedAuth(BaseModel):
@@ -35,6 +39,13 @@ class RedactedAuth(BaseModel):
                 )
 
 
+def guard_auth_enabled(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+    if not connection.app.state.context.config.features.auth:
+        raise NotFoundException(
+            "Endpoint disabled (auth/user management is not configured)"
+        )
+
+
 class MetaUserController(Controller):
     path = "/meta/users"
 
@@ -43,3 +54,14 @@ class MetaUserController(Controller):
     )
     async def get_self(self, auth: Any) -> RedactedAuth:
         return RedactedAuth.from_auth(auth)
+
+    @get("/")
+    async def list_users(self, context: Context) -> list[RedactedAuth]:
+        if context.config.features.auth:
+            results = AuthUser.all()
+            if context.config.auth.admin.enabled:
+                results.append(AuthAdmin(username=context.config.auth.admin.username))
+
+            return [RedactedAuth.from_auth(r) for r in results]
+
+        return []
