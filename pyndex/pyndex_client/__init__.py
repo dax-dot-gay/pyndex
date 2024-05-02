@@ -57,3 +57,4 @@ def main(ctx: click.Context, config: str | None, verbose: int, repo: str):
 main.add_command(connection)
 main.add_command(user)
 main.add_command(group)
+main.add_command(package)
