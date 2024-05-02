@@ -77,7 +77,7 @@ class MetaUserController(Controller):
         else:
             result = AuthUser.get(id)
             if result:
-                return result
+                return RedactedAuth.from_auth(result)
 
         raise NotFoundException(f"User with ID {id} does not exist.")
 
@@ -93,7 +93,7 @@ class MetaUserController(Controller):
         else:
             result = AuthUser.from_username(username)
             if result:
-                return result
+                return RedactedAuth.from_auth(result)
 
         raise NotFoundException(f"User with username {username} does not exist.")
 

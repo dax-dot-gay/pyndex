@@ -29,6 +29,9 @@ def user(ctx: click.Context):
                 f"[green][bold]Auth Type:[/bold][/green]\t{result.type}"
             )
             context.console.print(f"[green][bold]User:[/bold][/green]\t\t{result.name}")
+            context.console.print(
+                f"[green][bold]Groups:[/bold][/green]\t\t{', '.join([(i.display_name + '(' + i.name + ')') if i.display_name else i for i in result.groups])}"
+            )
 
 
 @user.command("create")
@@ -90,14 +93,15 @@ def list_users(obj: Context):
 
 
 @user.group("modify", cls=AliasResolver)
-@click.argument("username")
+@click.option(
+    "--username", "-u", "username", prompt="Username", help="Username to modify"
+)
 @click.pass_context
-def modify_user(username: str, ctx: click.Context):
-    """Modifies user specified by USERNAME"""
+def modify_user(ctx: click.Context, username: str = None):
     pass
 
 
-@modify_user.command("add-group")
+@modify_user.command("groupadd")
 @click.option(
     "--group",
     "-g",
@@ -115,3 +119,15 @@ def add_groups(ctx: click.Context, group: list[str]):
                 "[bold red]Error:[/bold red]\t Active user does not have the `meta.admin` permission for this connection."
             )
             raise click.Abort()
+        try:
+            index.add_user_to_groups(username, group)
+        except ValueError:
+            context.console.print(f"[bold red]Error:[/bold red]\t Unknown username")
+            raise click.Abort()
+        except ApiError as e:
+            context.console.print(f"[bold red]API Error:[/bold red]\t {e.reason}")
+            raise click.Abort()
+
+        context.console.print(
+            f"[green bold]Success:[/bold green] Added {len(group)} group(s) to {username}."
+        )

@@ -183,3 +183,33 @@ class Pyndex:
             return AuthGroup(**result.json())
         else:
             raise ApiError(response=result)
+
+    def get_user(
+        self, username: str | None = None, user_id: str | None = None
+    ) -> RedactedAuth | None:
+        if (username == None and user_id == None) or (
+            username != None and user_id != None
+        ):
+            raise ValueError("Must specify username OR user_id")
+
+        if username:
+            result = self.client.get(self.url(f"/meta/users/name/{username}"))
+        else:
+            result = self.client.get(self.url(f"/meta/users/id/{user_id}"))
+        if result.is_success:
+            print(result.json())
+            return RedactedAuth(**result.json())
+        return None
+
+    def add_user_to_groups(self, username: str, groups: list[str]) -> RedactedAuth:
+        user = self.get_user(username=username)
+        if not user:
+            raise ValueError("Unknown username")
+
+        result = self.client.post(
+            self.url(f"/meta/admin/user/{user.id}/groups"), json=groups
+        )
+        if result.is_success:
+            return RedactedAuth(**result.json())
+        else:
+            raise ApiError(response=result)

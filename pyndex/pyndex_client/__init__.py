@@ -50,7 +50,7 @@ def main(ctx: click.Context, config: str | None, verbose: int, repo: str):
         config_file_path=config_path,
         config=cfg,
         repo_override=repo,
-        console=rich.console.Console(),
+        console=rich.console.Console(highlighter=None),
     )
 
 
