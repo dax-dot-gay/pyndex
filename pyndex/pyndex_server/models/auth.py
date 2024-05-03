@@ -8,12 +8,20 @@ from typing import Any, Callable, Literal
 from litestar import Request
 from pydantic import BaseModel, Field
 from tinydb import where
+
 from .base import BaseObject
 from litestar.connection import ASGIConnection
 from litestar.exceptions import *
 from litestar.handlers.base import BaseRouteHandler
-
-PERMISSION = Literal["meta.admin", "repo.admin", "repo.edit", "repo.view"]
+from ...common import (
+    AuthAdmin as _AuthAdmin,
+    AuthGroup as _AuthGroup,
+    AuthPermission as _AuthPermission,
+    AuthUser as _AuthUser,
+    AuthToken as _AuthToken,
+    MetaPermission,
+    PackagePermission,
+)
 
 
 class AuthBase:
@@ -22,39 +30,31 @@ class AuthBase:
 
     @cached_property
     def is_admin(self) -> bool:
-        return any([i.permission == "meta.admin" for i in self.permissions()])
+        return any([i.permission == MetaPermission.ADMIN for i in self.permissions()])
 
-    def check_access(self, project: str) -> PERMISSION | None:
+    def check_access(self, project: str) -> PackagePermission | None:
         results = self.permissions(project=project)
         if len(results) == 0:
             return None
 
         bare = [i.permissions for i in results]
-        if "repo.admin" in bare:
-            return "repo.admin"
-        elif "repo.edit" in bare:
-            return "repo.edit"
-        elif "repo.view" in bare:
-            return "repo.view"
+        if PackagePermission.MANAGE in bare:
+            return PackagePermission.MANAGE
+        elif PackagePermission.EDIT in bare:
+            return PackagePermission.EDIT
+        elif PackagePermission.VIEW in bare:
+            return PackagePermission.VIEW
         return None
 
 
-class AuthAdmin(BaseModel, AuthBase):
-    type: Literal["admin"] = "admin"
-    username: str | None = None
-
+class AuthAdmin(_AuthAdmin, AuthBase):
     @property
     def id(self) -> str:
         return "_admin"
 
 
-class AuthUser(BaseObject, AuthBase):
+class AuthUser(_AuthUser, BaseObject, AuthBase):
     _collection = "creds"
-    type: Literal["user"] = "user"
-    username: str | None = None
-    password_hash: str | None = None
-    password_salt: str | None = None
-    groups: list[str] = []
 
     @classmethod
     def create(cls, username: str, password: str | None = None) -> "AuthUser":
@@ -87,31 +87,20 @@ class AuthUser(BaseObject, AuthBase):
         return cls.find_one(where("username") == username)
 
 
-class AuthGroup(BaseObject, AuthBase):
+class AuthGroup(_AuthGroup, BaseObject, AuthBase):
     _collection = "groups"
-    name: str
-    display_name: str | None = None
 
 
-class AuthToken(BaseObject, AuthBase):
+class AuthToken(_AuthToken, BaseObject, AuthBase):
     _collection = "creds"
-    token: str | None = Field(default_factory=lambda: token_urlsafe())
-    type: Literal["token"] = "token"
-    linked_user: str | None = None
-    description: str | None = None
-    groups: list[str] = []
 
     @classmethod
     def from_token(cls, token: str) -> "AuthToken | None":
         return cls.find_one(where("token") == token)
 
 
-class AuthPermission(BaseObject):
+class AuthPermission(_AuthPermission, BaseObject):
     _collection = "permissions"
-    permission: PERMISSION
-    target_type: Literal["group", "auth"]
-    target_id: str
-    project: str | None = None
 
     @classmethod
     def get_permissions(
@@ -145,7 +134,7 @@ class AuthPermission(BaseObject):
             results.append(
                 AuthPermission(
                     id="_admin",
-                    permission="meta.admin",
+                    permission=MetaPermission.ADMIN,
                     target_type="auth",
                     target_id="_admin",
                     project=project,
