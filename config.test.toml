@@ -1,0 +1,23 @@
+[storage]
+root = "{storage}"
+
+[api]
+path_base = "/"
+
+[proxy]
+[proxy.pypi]
+name = "PyPi"
+priority = 0
+
+[proxy.pypi.urls]
+index = "https://pypi.org/simple/{project_name}"
+package = "https://pypi.org/pypi/{project_name}/json"
+
+[features]
+proxy = true
+auth = true
+
+[auth]
+[auth.admin]
+username = "admin"
+password = "admin"

@@ -35,10 +35,14 @@ class BaseInstance:
             ]
         )
 
-    def connect(self):
-        self.client = Client(
-            auth=BasicAuth(username=self.username, password=self.password),
-            follow_redirects=True,
+    def connect(self, client: Client | None = None):
+        self.client = (
+            client
+            if client
+            else Client(
+                auth=BasicAuth(username=self.username, password=self.password),
+                follow_redirects=True,
+            )
         )
 
     def disconnect(self):
