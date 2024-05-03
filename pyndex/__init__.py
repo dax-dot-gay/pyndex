@@ -12,11 +12,4 @@ try:
 except ImportError:
     raise
 
-try:
-    from .pyndex_client import main
-
-    FEATURES.append("client")
-except ImportError:
-    raise
-
 from .common import *

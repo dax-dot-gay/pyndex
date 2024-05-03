@@ -2,9 +2,8 @@ import base64
 from httpx import Request
 from litestar import Router
 from litestar.di import Provide
-from .pypi import PypiController
 from .files import FilesController
-from .packages import PackagesController
+from .packages import PackageController
 from .meta import *
 from ..context import Context
 from ..models import AuthUser, AuthToken, AuthAdmin, get_authentication
@@ -89,9 +88,8 @@ def make_api_router(base: str) -> Router:
     return Router(
         base,
         route_handlers=[
-            PypiController,
             FilesController,
-            PackagesController,
+            PackageController,
             MetaUserController,
             MetaAdminController,
             MetaGroupController,
