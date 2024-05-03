@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from typing import Any, Generator
 from .util import BaseInstance
+from .operators import *
 
 
 class Pyndex(BaseInstance):
@@ -14,3 +15,7 @@ class Pyndex(BaseInstance):
         self.connect()
         yield self
         self.disconnect()
+
+    @property
+    def package(self) -> PackageOperator:
+        return PackageOperator(self)

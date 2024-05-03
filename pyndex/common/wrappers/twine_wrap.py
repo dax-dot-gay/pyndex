@@ -179,7 +179,7 @@ def upload(
     username: str = "",
     password: str = "",
     **kwargs,
-) -> set[str]:
+) -> set[tuple[str, str]]:
     """A library-friendly wrapper around twine.commands.upload.upload
 
     Args:
@@ -192,7 +192,7 @@ def upload(
         **kwargs (Any, optional): Additional keyword arguments to pass to Settings.
 
     Returns:
-        set[str]: Release URLs if provided
+        set[tuple[str, str]]: Set of (package name, package version) uploaded
 
     Attribution:
         Main code is attributed to https://github.com/pypa/twine/blob/48af4c1bd476334d7360ca854537116afeeffd43/twine/commands/upload.py#L94, licensed under the Apache 2.0 license.
@@ -244,7 +244,7 @@ def upload(
             )
 
     repository = upload_settings.create_repository()
-    uploaded_packages = []
+    uploaded_packages: list[PackageFile] = []
 
     if signatures and not packages_to_upload:
         raise exceptions.InvalidDistribution(
@@ -287,9 +287,9 @@ def upload(
 
         uploaded_packages.append(package)
 
-    release_urls = repository.release_urls(uploaded_packages)
+    uploaded = set([(i.safe_name, i.metadata.version) for i in uploaded_packages])
 
     # Bug 28. Try to silence a ResourceWarning by clearing the connection
     # pool.
     repository.close()
-    return release_urls
+    return uploaded

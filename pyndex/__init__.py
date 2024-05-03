@@ -13,3 +13,4 @@ except ImportError:
     raise
 
 from .common import *
+from .pyndex_api import Pyndex

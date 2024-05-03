@@ -1,4 +1,5 @@
-from httpx import Client, BasicAuth
+from typing import Any
+from httpx import Client, BasicAuth, Response
 
 
 class BaseInstance:
@@ -29,8 +30,8 @@ class BaseInstance:
         return "/".join(
             [
                 i.strip("/")
-                for i in list(self.host, self.api_base, *parts)
-                if len(i.strip("/") > 0)
+                for i in [self.host, self.api_base, *parts]
+                if len(i.strip("/")) > 0
             ]
         )
 
@@ -44,3 +45,24 @@ class BaseInstance:
         if self.client and not self.client.is_closed:
             self.client.close()
             self.client = None
+
+
+class ApiError(RuntimeError):
+    def __init__(
+        self, status_code: int, url: str, detail: str | None, *args: object
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = status_code
+        self.url = url
+        self.detail = detail
+
+    def __str__(self) -> str:
+        return f"Failed to call {self.url}: Error {self.status_code}{'\n\tReason: ' + self.detail if self.detail else ''}"
+
+    @classmethod
+    def from_response(cls, response: Response) -> "ApiError":
+        try:
+            detail = response.json()["detail"]
+        except:
+            detail = None
+        return cls(response.status_code, response.url, detail)
