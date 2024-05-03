@@ -19,3 +19,7 @@ class Pyndex(BaseInstance):
     @property
     def package(self) -> PackageOperator:
         return PackageOperator(self)
+
+    @property
+    def users(self) -> UserOperator:
+        return UserOperator(self)

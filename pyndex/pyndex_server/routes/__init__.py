@@ -4,7 +4,7 @@ from litestar import Router
 from litestar.di import Provide
 from .files import FilesController
 from .packages import PackageController
-from .meta import *
+from .user import UserController, RedactedAuth
 from ..context import Context
 from ..models import AuthUser, AuthToken, AuthAdmin, get_authentication
 from litestar.connection import ASGIConnection
@@ -87,13 +87,7 @@ async def provide_authentication(
 def make_api_router(base: str) -> Router:
     return Router(
         base,
-        route_handlers=[
-            FilesController,
-            PackageController,
-            MetaUserController,
-            MetaAdminController,
-            MetaGroupController,
-        ],
+        route_handlers=[FilesController, PackageController, UserController],
         guards=[guard_authenticated],
         dependencies={"auth": Provide(provide_authentication)},
     )
