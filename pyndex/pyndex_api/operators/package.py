@@ -2,12 +2,42 @@ from typing import Any, Callable
 
 from pydantic import BaseModel
 from .base import BaseOperator, BaseOperatorModel
-from ...common import Package, upload, ProgressUpdate
+from ...common import Package, upload, ProgressUpdate, PackageFileDetail
 from ..util import ApiError
 
 
 class PackageItem(Package, BaseOperatorModel["PackageOperator"]):
-    pass
+
+    def __init__(self, operator: "PackageOperator" = None, **data):
+        super().__init__(**data)
+        self._operator = operator
+
+    def get_version(self, version: str) -> "PackageItem | None":
+        """Gets a different version of this package
+
+        Args:
+            version (str): Version to get
+
+        Returns:
+            PackageItem | None: PackageItem if found, None otherwise
+        """
+        return self.operator(self.info.name, version=version, local=self.local)
+
+    def get_files(self) -> list[PackageFileDetail]:
+        """Returns all files associated with this package
+
+        Raises:
+            ApiError.from_response: If the API returns an error response
+
+        Returns:
+            list[PackageFileDetail]: List of package files
+        """
+        result = self.client.get(
+            self.url("packages", self.info.name), params={"local": self.local}
+        )
+        if result.is_success:
+            return [PackageFileDetail(**i) for i in result.json()["files"]]
+        raise ApiError.from_response(result)
 
 
 class LazyPackageList:
