@@ -2,12 +2,28 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 import os
 import shutil
-from typing import Callable
+from typing import Callable, Literal
 from pyndex import server, Pyndex
 from litestar.testing import TestClient
 from httpx import BasicAuth
 import pytest
 from litestar import Litestar
+from pydantic import BaseModel
+
+
+class UserRequest(BaseModel):
+    type: Literal["user"] = "user"
+    username: str
+    password: str | None = None
+    groups: list[str] = []
+    server_permissions: list[Literal["meta.admin", "meta.create"]] = []
+
+
+class GroupRequest(BaseModel):
+    type: Literal["group"] = "group"
+    name: str
+    display_name: str | None = None
+    server_permissions: list[Literal["meta.admin", "meta.create"]] = []
 
 
 USERNAME_ADMIN = "admin"
@@ -18,7 +34,16 @@ GROUPS = {"basic": "Basic Group", "admins": "Administrators", "project_members":
 
 
 @pytest.fixture(scope="class", autouse=True)
-def env(tmp_path_factory: pytest.TempPathFactory):
+def env(tmp_path_factory: pytest.TempPathFactory, request):
+    requests: list[UserRequest | GroupRequest] = []
+    for request_type in ["user", "group"]:
+        for req in request.node.iter_markers(name=request_type):
+            match request_type:
+                case "user":
+                    requests.append(UserRequest(**req.kwargs))
+                case "group":
+                    requests.append(GroupRequest(**req.kwargs))
+
     directory = tmp_path_factory.mktemp("pynd_base")
     shutil.copyfile("./config.toml", "config.toml.dev")
     shutil.copyfile("./config.test.toml", "./config.toml")
@@ -30,14 +55,33 @@ def env(tmp_path_factory: pytest.TempPathFactory):
     with open("config.toml", "w") as f:
         f.write(contents.replace("{storage}", str(storage)))
 
+    group_adds: dict[str, str] = {}
     with TestClient(app=server) as client:
         client.auth = BasicAuth(username=USERNAME_ADMIN, password=PASSWORD_ADMIN)
         with Pyndex("").session(client=client) as index:
-            for username, password in USERS.items():
-                index.users.create(username, password=password)
+            for req in requests:
+                try:
+                    match req.type:
 
-            for name, display in GROUPS.items():
-                index.groups.create(name, display_name=display)
+                        case "user":
+                            created = index.users.create(
+                                req.username, password=req.password
+                            )
+                            if len(req.groups) > 0:
+                                group_adds[created.id] = req.groups
+                        case "group":
+                            created = index.groups.create(
+                                req.name, display_name=req.display_name
+                            )
+                except:
+                    pass
+
+            for user_id, group_names in group_adds.items():
+                for name in group_names:
+                    result = client.post(
+                        f"/groups/name/{name}/members/add",
+                        params={"auth_type": "user", "auth_id": user_id},
+                    )
     yield directory
     shutil.copyfile("./config.toml.dev", "config.toml")
     os.remove("config.toml.dev")
@@ -51,54 +95,33 @@ def admin_client(env) -> Iterator[TestClient[Litestar]]:
 
 
 @pytest.fixture(scope="function")
-def user_client(env, request) -> Iterator[TestClient[Litestar]]:
-    mark = request.node.get_closest_marker("user")
-    print(dir(request.node))
-    if mark:
-        username = mark.args[0]
-        if username in USERS.keys():
-            password = USERS[username]
-        else:
-            raise KeyError(f"Undefined user {username}")
-    else:
-        username = "basic"
-        password = "basic"
-    with TestClient(app=server) as client:
-        client.auth = BasicAuth(username=username, password=password)
-        yield client
-
-
-@pytest.fixture(scope="function")
-def dynamic_user(env) -> Callable[[str], Iterator[TestClient[Litestar]]]:
-    @contextmanager
-    def make_client(user: str) -> Iterator[TestClient[Litestar]]:
-        if user in USERS.keys():
-            with TestClient(app=server) as client:
-                client.auth = BasicAuth(username=user, password=USERS[user])
-                yield client
-        else:
-            raise KeyError
-
-    return make_client
-
-
-@pytest.fixture(scope="function")
 def as_admin(admin_client: TestClient) -> Iterator[Pyndex]:
     with Pyndex("").session(client=admin_client) as session:
         yield session
 
 
 @pytest.fixture(scope="function")
-def as_user(user_client: TestClient) -> Iterator[dict[str, Pyndex]]:
-    with Pyndex("").session(client=user_client) as session:
-        yield session
+def user_client(env) -> Callable[[str, str | None], Iterator[TestClient[Litestar]]]:
+    @contextmanager
+    def make_client(
+        username: str, password: str | None
+    ) -> Iterator[TestClient[Litestar]]:
+        with TestClient(app=server) as client:
+            client.auth = BasicAuth(
+                username=username, password=password if password else None
+            )
+            yield client
+
+    return make_client
 
 
 @pytest.fixture(scope="function")
-def as_dynamic_user(dynamic_user) -> Callable[[str], Iterator[Pyndex]]:
+def as_user(env, user_client) -> Callable[[str, str | None], Iterator[Pyndex]]:
     @contextmanager
-    def make_index(user: str) -> Iterator[Pyndex]:
-        with dynamic_user(user) as client:
+    def make_index(
+        username: str, password: str | None
+    ) -> Iterator[TestClient[Litestar]]:
+        with user_client(username, password) as client:
             with Pyndex("").session(client=client) as index:
                 yield index
 
@@ -108,8 +131,3 @@ def as_dynamic_user(dynamic_user) -> Callable[[str], Iterator[Pyndex]]:
 @pytest.fixture
 def admin_creds() -> tuple[str, str]:
     return USERNAME_ADMIN, PASSWORD_ADMIN
-
-
-@pytest.fixture
-def user_creds() -> dict[str, str | None]:
-    return USERS

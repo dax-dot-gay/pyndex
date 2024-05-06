@@ -55,5 +55,6 @@ Repository = "https://github.com/iTecAI/pyndex.git"
 
 [tool.pytest.ini_options]
 markers = [
-  "user: marks test as requiring user <name>"
+  "user: Request a user to be generated (called on the class level)",
+  "group: Request a group to be generated (called on the class level)"
 ]

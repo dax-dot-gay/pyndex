@@ -28,18 +28,25 @@ class TestAdmin:
         assert data["name"] == admin_creds[0]
 
 
-@pytest.mark.parametrize("username", ["basic", "moderator", "project_owner"])
+@pytest.mark.user(username="basic", password="basic", groups=["general"])
+@pytest.mark.user(username="moderator", password="admin", groups=["admins"])
+@pytest.mark.group(name="general")
+@pytest.mark.group(name="admins", display_name="Administrators")
+@pytest.mark.parametrize(
+    ["username", "password"], [("basic", "basic"), ("moderator", "admin")]
+)
 class TestUserQueries:
-    def test_user_self(self, dynamic_user, username):
-        with dynamic_user(username) as user_client:
+
+    def test_user_self(self, user_client, username, password):
+        with user_client(username, password) as user_client:
             result = user_client.get("/users/self")
             assert result.status_code == 200
             data = result.json()
             assert data["type"] == "user"
             assert data["name"] == username
 
-    def test_user_query(self, dynamic_user, username):
-        with dynamic_user(username) as user_client:
+    def test_user_query(self, user_client, username, password):
+        with user_client(username, password) as user_client:
             result = user_client.get(f"/users/name/{username}")
             assert result.status_code == 200
             data = result.json()
@@ -53,20 +60,22 @@ class TestUserQueries:
             assert data["name"] == username
 
 
+@pytest.mark.user(username="basic", password="basic")
+@pytest.mark.user(username="moderator", password="admin")
 class TestUsers:
+
     def test_user_list(
         self,
         admin_client: TestClient,
         admin_creds: tuple[str, str],
-        user_creds: dict[str, str | None],
     ):
         result = admin_client.get("/users")
         assert result.status_code == 200
         data = result.json()
         assert type(data) == list
-        assert len(data) == len(user_creds.keys()) + 1
+        assert len(data) == 3
         usernames = [i["name"] for i in data]
-        for username in [admin_creds[0], *user_creds.keys()]:
+        for username in [admin_creds[0], "basic", "admin"]:
             assert username in usernames
 
     def test_user_create(self, admin_client: TestClient):
