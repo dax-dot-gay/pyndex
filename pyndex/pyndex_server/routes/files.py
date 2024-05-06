@@ -8,12 +8,26 @@ from ..models import FileMetadata
 
 
 class FilesController(Controller):
+    """
+    Controls file retrieval
+    """
     path = "/files"
 
     @get("{project_name:str}/{project_version:str}/{filename:str}")
     async def get_project_file(
         self, context: Context, project_name: str, project_version: str, filename: str
     ) -> File:
+        """Gets a file associated with a specific project version.
+
+        Args:
+            context (Context): Application context
+            project_name (str): Project name
+            project_version (str): Project version
+            filename (str): Filename, optionally with ".metadata" to request that file's metadata
+
+        Returns:
+            File: Returns the file contents (or text metadata if requested)
+        """
 
         if filename.endswith(".metadata"):
             if not context.root.joinpath(

@@ -13,6 +13,11 @@ from litestar.handlers.base import BaseRouteHandler
 
 
 async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+    """Checks if the current connection is authenticated, assuming that authentication is active.
+
+    Args:
+        connection (ASGIConnection): ASGI connection object
+    """
     context: Context = connection.app.state.context
     if context.config.features.auth:
         if not connection.headers.get("authorization", None):
@@ -81,10 +86,27 @@ async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -
 async def provide_authentication(
     request: Request, context: Context
 ) -> AuthUser | AuthToken | AuthAdmin | None:
+    """Provides the currently authenticated user, or None if anonymous
+
+    Args:
+        request (Request): HTTP request object
+        context (Context): Application context
+
+    Returns:
+        AuthUser | AuthToken | AuthAdmin | None: Active authenticated user/token
+    """
     return get_authentication(request, context)
 
 
 def make_api_router(base: str) -> Router:
+    """Creates the main application routing at a dynamic base URL
+
+    Args:
+        base (str): Base URL to prepend
+
+    Returns:
+        Router: Litestar Router
+    """
     return Router(
         base,
         route_handlers=[

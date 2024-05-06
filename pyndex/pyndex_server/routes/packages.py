@@ -17,6 +17,9 @@ from litestar.exceptions import *
 
 
 class PackageController(Controller):
+    """
+    Performs package-related tasks
+    """
     path = "/packages"
 
     @post("/upload")
@@ -25,6 +28,18 @@ class PackageController(Controller):
         context: Context,
         data: Annotated[FileMetadata, Body(media_type=RequestEncodingType.MULTI_PART)],
     ) -> FileMetadata:
+        """Uploads a file to the index
+
+        Args:
+            context (Context): Application context
+            data (Annotated[FileMetadata, Body, optional): Multipart form data containing file metadata & the file blob itself. Metadata format from `https://warehouse.pypa.io/api-reference/legacy.html#upload-api`
+
+        Raises:
+            MethodNotAllowedException: Raised if the file already exists
+
+        Returns:
+            FileMetadata: Metadata about the uploaded file
+        """
         try:
             await data.save(str(context.root.joinpath("index")))
         except FileExistsError:
@@ -41,6 +56,20 @@ class PackageController(Controller):
     async def get_file_info(
         self, context: Context, project_name: str, request: Request, local: bool = False
     ) -> PackageDetail:
+        """Retrieves a list of files associated with the given project (across all versions)
+
+        Args:
+            context (Context): Application context
+            project_name (str): Project name
+            request (Request): Litestar Request object
+            local (bool, optional): Whether to only query local (non-proxied) packages. Defaults to False.
+
+        Raises:
+            NotFoundException: Raised if the package couldn't be found
+
+        Returns:
+            PackageDetail: Details about the package. Format based on `https://packaging.python.org/en/latest/specifications/simple-repository-api/#project-detail`
+        """
         if not os.path.exists(context.root.joinpath("index", project_name)):
             if len(context.config.proxies) > 0 and not local:
                 for proxy in context.config.proxies:
@@ -62,6 +91,14 @@ class PackageController(Controller):
 
     @get("/", response_headers={"Content-Type": "application/vnd.pypi.simple.v1+json"})
     async def get_file_list(self, context: Context) -> PackageList:
+        """Returns a list of all packages on the local index. Does not include proxied packages to avoid duplication & confusion
+
+        Args:
+            context (Context): Application context
+
+        Returns:
+            PackageList: PackageList object. Based on `https://packaging.python.org/en/latest/specifications/simple-repository-api/#project-list`
+        """
         names = os.listdir(context.root.joinpath("index"))
         return PackageList(
             meta=APIMeta(), projects=[PackageListItem(name=name) for name in names]
@@ -75,6 +112,20 @@ class PackageController(Controller):
         request: Request,
         local: Optional[bool] = False,
     ) -> Package:
+        """Gets in-depth information about a specific package's latest version
+
+        Args:
+            context (Context): Application context
+            project_name (str): Project name
+            request (Request): Litestar Request object
+            local (Optional[bool], optional): Whether to only query the local index. Defaults to False.
+
+        Raises:
+            NotFoundException: If package wasn't found
+
+        Returns:
+            Package: Package details. Based on `https://warehouse.pypa.io/api-reference/json.html#project`
+        """
         try:
             return Package.assemble_package(
                 context.root.joinpath("index", project_name), url_base=request.base_url
@@ -100,6 +151,21 @@ class PackageController(Controller):
         request: Request,
         local: Optional[bool] = False,
     ) -> Package:
+        """Gets in-depth information about a specific package's specified version
+
+        Args:
+            context (Context): Application context
+            project_name (str): Project name
+            version (str): Project version
+            request (Request): Litestar Request object
+            local (Optional[bool], optional): Whether to only query the local index. Defaults to False.
+
+        Raises:
+            NotFoundException: If package wasn't found
+
+        Returns:
+            Package: Package details. Based on `https://warehouse.pypa.io/api-reference/json.html#release`
+        """
         try:
             return Package.assemble_package(
                 context.root.joinpath("index", project_name),
