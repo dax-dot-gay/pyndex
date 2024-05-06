@@ -49,7 +49,6 @@ class Config(BaseModel):
 
     @classmethod
     def load(cls) -> "Config":
-        print(os.environ)
         with open(os.getenv("PYNDEX_CONFIG", "./config.toml"), "rb") as config:
             return cls(**tomllib.load(config))
 

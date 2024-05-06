@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+import os
 import shutil
 from pyndex import server, Pyndex
 from litestar.testing import TestClient
@@ -17,31 +18,29 @@ PASSWORD_REGULAR = "regular"
 @pytest.fixture(scope="class", autouse=True)
 def env(tmp_path_factory: pytest.TempPathFactory):
     directory = tmp_path_factory.mktemp("pynd_base")
-    shutil.copyfile("./config.test.toml", directory / "config.toml")
-    with open(directory / "config.toml", "r") as f:
+    shutil.copyfile("./config.toml", "config.toml.dev")
+    shutil.copyfile("./config.test.toml", "./config.toml")
+    with open("config.toml", "r") as f:
         contents = f.read()
     (directory / "storage").mkdir(exist_ok=True)
     storage = (directory / "storage").absolute()
 
-    with open(directory / "config.toml", "w") as f:
+    with open("config.toml", "w") as f:
         f.write(contents.replace("{storage}", str(storage)))
-    return directory
-
-
-@pytest.fixture(autouse=True)
-def patch(monkeypatch, env):
-    monkeypatch.setenv("PYNDEX_CONFIG", str((env / "config.toml").absolute()))
+    yield directory
+    shutil.copyfile("./config.toml.dev", "config.toml")
+    os.remove("config.toml.dev")
 
 
 @pytest.fixture(scope="class")
-def admin_client(env, patch) -> Iterator[TestClient[Litestar]]:
+def admin_client(env) -> Iterator[TestClient[Litestar]]:
     with TestClient(app=server) as client:
         client.auth = BasicAuth(username=USERNAME_ADMIN, password=PASSWORD_ADMIN)
         yield client
 
 
 @pytest.fixture(scope="class")
-def user_client(env, patch) -> Iterator[TestClient[Litestar]]:
+def user_client(env) -> Iterator[TestClient[Litestar]]:
     with TestClient(app=server) as client:
         client.auth = BasicAuth(username=USERNAME_REGULAR, password=PASSWORD_REGULAR)
         yield client
