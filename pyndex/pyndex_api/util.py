@@ -25,6 +25,7 @@ class BaseInstance:
         self.host = host
         self.api_base = api_base
         self.client: Client | None = None
+        self.devmode = False
 
     def url(self, *parts: str) -> str:
         return "/".join(
@@ -44,6 +45,10 @@ class BaseInstance:
                 follow_redirects=True,
             )
         )
+        if client:
+            self.devmode = True
+        else:
+            self.devmode = False
 
     def disconnect(self):
         if self.client and not self.client.is_closed:

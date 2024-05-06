@@ -26,20 +26,38 @@ class GroupRequest(BaseModel):
     server_permissions: list[Literal["meta.admin", "meta.create"]] = []
 
 
+class PackageRequest(BaseModel):
+    type: Literal["package"] = "package"
+    dist: str
+    username: str | None = None
+    password: str | None = None
+
+
+class Requests(BaseModel):
+    user: list[UserRequest] = []
+    group: list[GroupRequest] = []
+    package: list[PackageRequest] = []
+
+    def append(self, request: UserRequest | GroupRequest | PackageRequest):
+        getattr(self, request.type).append(request)
+
+
 USERNAME_ADMIN = "admin"
 PASSWORD_ADMIN = "admin"
 
 
 @pytest.fixture(scope="class", autouse=True)
 def env(tmp_path_factory: pytest.TempPathFactory, request):
-    requests: list[UserRequest | GroupRequest] = []
-    for request_type in ["user", "group"]:
+    requests = Requests()
+    for request_type in ["user", "group", "package"]:
         for req in request.node.iter_markers(name=request_type):
             match request_type:
                 case "user":
                     requests.append(UserRequest(**req.kwargs))
                 case "group":
                     requests.append(GroupRequest(**req.kwargs))
+                case "package":
+                    requests.append(PackageRequest(**req.kwargs))
 
     directory = tmp_path_factory.mktemp("pynd_base")
     shutil.copyfile("./config.toml", "config.toml.dev")
@@ -52,33 +70,33 @@ def env(tmp_path_factory: pytest.TempPathFactory, request):
     with open("config.toml", "w") as f:
         f.write(contents.replace("{storage}", str(storage)))
 
-    group_adds: dict[str, str] = {}
     with TestClient(app=server) as client:
         client.auth = BasicAuth(username=USERNAME_ADMIN, password=PASSWORD_ADMIN)
-        with Pyndex("").session(client=client) as index:
-            for req in requests:
-                try:
-                    match req.type:
+        with Pyndex("http://testserver.local").session(client=client) as index:
+            for group in requests.group:
+                index.groups.create(group.name, display_name=group.display_name)
 
-                        case "user":
-                            created = index.users.create(
-                                req.username, password=req.password
-                            )
-                            if len(req.groups) > 0:
-                                group_adds[created.id] = req.groups
-                        case "group":
-                            created = index.groups.create(
-                                req.name, display_name=req.display_name
-                            )
-                except:
-                    pass
-
-            for user_id, group_names in group_adds.items():
-                for name in group_names:
-                    result = client.post(
-                        f"/groups/name/{name}/members/add",
-                        params={"auth_type": "user", "auth_id": user_id},
+            for user in requests.user:
+                created = index.users.create(user.username, password=user.password)
+                for group in user.groups:
+                    client.post(
+                        f"/groups/name/{group}/members",
+                        params={"auth_type": "user", "auth_id": created.id},
                     )
+
+    for package in requests.package:
+        with TestClient(app=server) as client:
+            client.auth = BasicAuth(
+                username=package.username if package.username else "",
+                password=package.password if package.password else "",
+            )
+            with Pyndex(
+                "http://testserver.local",
+                username=package.username,
+                password=package.password,
+            ).session(client=client) as index:
+                index.package.upload(package.dist)
+
     yield directory
     shutil.copyfile("./config.toml.dev", "config.toml")
     os.remove("config.toml.dev")
@@ -93,7 +111,9 @@ def admin_client(env) -> Iterator[TestClient[Litestar]]:
 
 @pytest.fixture(scope="function")
 def as_admin(admin_client: TestClient) -> Iterator[Pyndex]:
-    with Pyndex("").session(client=admin_client) as session:
+    with Pyndex(
+        "http://testserver.local", username=USERNAME_ADMIN, password=PASSWORD_ADMIN
+    ).session(client=admin_client) as session:
         yield session
 
 
@@ -119,7 +139,9 @@ def as_user(env, user_client) -> Callable[[str, str | None], Iterator[Pyndex]]:
         username: str, password: str | None
     ) -> Iterator[TestClient[Litestar]]:
         with user_client(username, password) as client:
-            with Pyndex("").session(client=client) as index:
+            with Pyndex(
+                "http://testserver.local", username=username, password=password
+            ).session(client=client) as index:
                 yield index
 
     return make_index

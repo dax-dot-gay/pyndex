@@ -91,8 +91,12 @@ class AuthGroup(_AuthGroup, BaseObject, AuthBase):
     _collection = "groups"
 
     def get_members(self) -> list["AuthUser | AuthToken"]:
-        users = AuthUser.find(where("groups").any([self.id]))
-        tokens = AuthToken.find(where("groups").any([self.id]))
+        users = AuthUser.find(
+            (where("groups").any([self.id])) & (where("type") == "user")
+        )
+        tokens = AuthToken.find(
+            (where("groups").any([self.id])) & (where("type") == "token")
+        )
         return [*users, *tokens]
 
 

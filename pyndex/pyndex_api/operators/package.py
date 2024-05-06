@@ -101,6 +101,7 @@ class PackageOperator(BaseOperator):
             repository_url=self.url("packages", "upload"),
             username=self.instance.username,
             password=self.instance.password,
+            client=self.client if self.instance.devmode else None,
         )
 
         return [self(name, version=version, local=True) for name, version in packages]
