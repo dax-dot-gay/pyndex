@@ -1,5 +1,5 @@
 from typing import Any, Literal, Type
-from litestar import Controller, get, post
+from litestar import Controller, delete, get, post
 from pydantic import BaseModel
 from tinydb import where
 from ..models import AuthAdmin, AuthUser, AuthToken, AuthGroup, guard_admin
@@ -203,3 +203,7 @@ class UserQueryController(Controller):
             RedactedAuth: Queried user info
         """
         return RedactedAuth.from_auth(user)
+
+    @delete("/", guards=[guard_admin])
+    async def delete_user(self, user: Any) -> None:
+        user.delete()

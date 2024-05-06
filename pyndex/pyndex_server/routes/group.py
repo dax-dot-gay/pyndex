@@ -1,5 +1,5 @@
 from typing import Literal
-from litestar import Controller, get, post
+from litestar import Controller, delete, get, post
 from litestar.exceptions import *
 from litestar.di import Provide
 from pydantic import BaseModel, computed_field
@@ -120,3 +120,11 @@ class SpecificGroupController(Controller):
 
         auth.save()
         return [RedactedAuth.from_auth(i) for i in group.get_members()]
+
+    @get("/members")
+    async def get_group_members(self, group: AuthGroup) -> list[RedactedAuth]:
+        return [RedactedAuth.from_auth(i) for i in group.get_members()]
+
+    @delete("/", guards=[guard_admin])
+    async def delete_group(self, group: AuthGroup) -> None:
+        group.delete()
