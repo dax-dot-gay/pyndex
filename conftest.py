@@ -29,9 +29,6 @@ class GroupRequest(BaseModel):
 USERNAME_ADMIN = "admin"
 PASSWORD_ADMIN = "admin"
 
-USERS = {"basic": "basic", "moderator": "moderator", "project_owner": "project_owner"}
-GROUPS = {"basic": "Basic Group", "admins": "Administrators", "project_members": None}
-
 
 @pytest.fixture(scope="class", autouse=True)
 def env(tmp_path_factory: pytest.TempPathFactory, request):
