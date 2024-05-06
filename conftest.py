@@ -14,6 +14,7 @@ USERNAME_ADMIN = "admin"
 PASSWORD_ADMIN = "admin"
 
 USERS = {"basic": "basic", "moderator": "moderator", "project_owner": "project_owner"}
+GROUPS = {"basic": "Basic Group", "admins": "Administrators", "project_members": None}
 
 
 @pytest.fixture(scope="class", autouse=True)
@@ -34,6 +35,9 @@ def env(tmp_path_factory: pytest.TempPathFactory):
         with Pyndex("").session(client=client) as index:
             for username, password in USERS.items():
                 index.users.create(username, password=password)
+
+            for name, display in GROUPS.items():
+                index.groups.create(name, display_name=display)
     yield directory
     shutil.copyfile("./config.toml.dev", "config.toml")
     os.remove("config.toml.dev")

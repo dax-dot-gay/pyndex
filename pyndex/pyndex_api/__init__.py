@@ -25,3 +25,7 @@ class Pyndex(BaseInstance):
     @property
     def users(self) -> UserOperator:
         return UserOperator(self)
+
+    @property
+    def groups(self) -> GroupOperator:
+        return GroupOperator(self)
