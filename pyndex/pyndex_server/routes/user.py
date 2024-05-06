@@ -8,6 +8,7 @@ from litestar.connection import ASGIConnection
 from litestar.exceptions import *
 from litestar.status_codes import *
 from litestar.handlers.base import BaseRouteHandler
+from litestar.di import Provide
 
 
 class RedactedAuth(BaseModel):
@@ -68,40 +69,6 @@ class UserController(Controller):
 
         return [RedactedAuth.from_auth(auth) for auth in results]
 
-    @get("/self")
-    async def get_self(self, auth: Any) -> RedactedAuth:
-        return RedactedAuth.from_auth(auth)
-
-    @get("/id/{user_id:str}")
-    async def get_user_by_id(self, user_id: str, context: Context) -> RedactedAuth:
-        if user_id == "_admin":
-            if context.config.auth.admin.enabled:
-                return RedactedAuth.from_auth(
-                    AuthAdmin(username=context.config.auth.admin.username)
-                )
-            else:
-                raise NotFoundException("Unknown user ID")
-
-        result = AuthUser.get(user_id)
-        if result:
-            return RedactedAuth.from_auth(result)
-        raise NotFoundException("Unknown user ID")
-
-    @get("/name/{username:str}")
-    async def get_user_by_name(self, username: str, context: Context) -> RedactedAuth:
-        if username == context.config.auth.admin.username:
-            if context.config.auth.admin.enabled:
-                return RedactedAuth.from_auth(
-                    AuthAdmin(username=context.config.auth.admin.username)
-                )
-            else:
-                raise NotFoundException("Unknown username")
-
-        result = AuthUser.from_username(username)
-        if result:
-            return RedactedAuth.from_auth(result)
-        raise NotFoundException("Unknown username")
-
     @post("/create", guards=[guard_admin])
     async def create_user(
         self, context: Context, data: UserCreationModel
@@ -119,3 +86,52 @@ class UserController(Controller):
         created = AuthUser.create(data.username, password=data.password)
         created.save()
         return RedactedAuth.from_auth(created)
+
+
+async def provide_user_query(
+    method: Literal["name", "id"], value: str, context: Context
+) -> AuthUser | AuthAdmin:
+    if not method in ["name", "id"]:
+        raise ValidationException(f"Unknown query method `{method}`")
+
+    if method == "name":
+        if value == context.config.auth.admin.username:
+            if context.config.auth.admin.enabled:
+                return AuthAdmin(username=context.config.auth.admin.username)
+            else:
+                raise NotFoundException("Unknown username")
+
+        result = AuthUser.from_username(value)
+        if result:
+            return result
+        raise NotFoundException("Unknown username")
+    else:
+        if value == "_admin":
+            if context.config.auth.admin.enabled:
+                return AuthAdmin(username=context.config.auth.admin.username)
+            else:
+                raise NotFoundException("Unknown user ID")
+
+        result = AuthUser.get(value)
+        if result:
+            return result
+        raise NotFoundException("Unknown user ID")
+
+
+class UserSelfController(Controller):
+    path = "/users/self"
+    guards = [guard_auth_enabled]
+
+    @get("/")
+    async def get_self(self, auth: Any) -> RedactedAuth:
+        return RedactedAuth.from_auth(auth)
+
+
+class UserQueryController(Controller):
+    path = "/users/{method:str}/{value:str}"
+    guards = [guard_auth_enabled]
+    dependencies = {"user": Provide(provide_user_query)}
+
+    @get("/")
+    async def get_user(self, user: Any) -> RedactedAuth:
+        return RedactedAuth.from_auth(user)

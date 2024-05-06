@@ -47,7 +47,10 @@ class BaseInstance:
 
     def disconnect(self):
         if self.client and not self.client.is_closed:
-            self.client.close()
+            try:
+                self.client.close()
+            except:
+                pass
             self.client = None
 
 

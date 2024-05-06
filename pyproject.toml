@@ -52,3 +52,8 @@ test = [
 [project.urls]
 Homepage = "https://github.com/iTecAI/pyndex"
 Repository = "https://github.com/iTecAI/pyndex.git"
+
+[tool.pytest.ini_options]
+markers = [
+  "user: marks test as requiring user <name>"
+]
