@@ -51,3 +51,29 @@ class TestUserQueries:
             data = result.json()
             assert data["type"] == "user"
             assert data["name"] == username
+
+
+class TestUsers:
+    def test_user_list(
+        self,
+        admin_client: TestClient,
+        admin_creds: tuple[str, str],
+        user_creds: dict[str, str | None],
+    ):
+        result = admin_client.get("/users")
+        assert result.status_code == 200
+        data = result.json()
+        assert type(data) == list
+        assert len(data) == len(user_creds.keys()) + 1
+        usernames = [i["name"] for i in data]
+        for username in [admin_creds[0], *user_creds.keys()]:
+            assert username in usernames
+
+    def test_user_create(self, admin_client: TestClient):
+        result = admin_client.post(
+            "/users/create", json={"username": "TEST_USER", "password": "TEST_PASSWORD"}
+        )
+        assert result.status_code == 201
+        data = result.json()
+        assert data["type"] == "user"
+        assert data["name"] == "TEST_USER"
