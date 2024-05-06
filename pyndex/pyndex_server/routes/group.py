@@ -4,8 +4,9 @@ from litestar.exceptions import *
 from litestar.di import Provide
 from pydantic import BaseModel, computed_field
 from tinydb import where
-from .user import guard_auth_enabled
-from ..models.auth import guard_admin, AuthGroup
+from .user import guard_auth_enabled, RedactedAuth
+from ..models.auth import guard_admin, AuthGroup, AuthUser, AuthToken
+from ..context import Context
 
 
 class GroupCreationModel(BaseModel):
@@ -91,3 +92,31 @@ class SpecificGroupController(Controller):
     @get("/")
     async def get_group(self, group: AuthGroup) -> AuthGroup:
         return group
+
+    @post("/members", guards=[guard_admin])
+    async def add_member(
+        self,
+        group: AuthGroup,
+        auth_type: Literal["user", "token"],
+        auth_id: str | None = None,
+    ) -> list[RedactedAuth]:
+        match auth_type:
+            case "user":
+                if not auth_id:
+                    raise ValidationException("Query parameter `auth_id` is required.")
+                auth = AuthUser.get(auth_id)
+                if not auth:
+                    raise NotFoundException(f"User with id `{auth_id}` not found.")
+
+            case "token":
+                if not auth_id:
+                    raise ValidationException("Query parameter `auth_id` is required.")
+                auth = AuthToken.get(auth_id)
+                if not auth:
+                    raise NotFoundException(f"Token with id `{auth_id}` not found.")
+
+        if not group.id in auth.groups:
+            auth.groups.append(group.id)
+
+        auth.save()
+        return [RedactedAuth.from_auth(i) for i in group.get_members()]

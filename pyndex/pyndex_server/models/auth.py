@@ -90,6 +90,11 @@ class AuthUser(_AuthUser, BaseObject, AuthBase):
 class AuthGroup(_AuthGroup, BaseObject, AuthBase):
     _collection = "groups"
 
+    def get_members(self) -> list["AuthUser | AuthToken"]:
+        users = AuthUser.find(where("groups").any([self.id]))
+        tokens = AuthToken.find(where("groups").any([self.id]))
+        return [*users, *tokens]
+
 
 class AuthToken(_AuthToken, BaseObject, AuthBase):
     _collection = "creds"
