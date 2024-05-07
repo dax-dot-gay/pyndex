@@ -207,3 +207,8 @@ async def guard_admin(connection: ASGIConnection, _: BaseRouteHandler) -> None:
         raise NotAuthorizedException(
             "Access to this endpoint is forbidden without the meta.admin permission."
         )
+
+
+class PermissionSpecModel(BaseModel):
+    permission: MetaPermission | PackagePermission
+    project: str | None

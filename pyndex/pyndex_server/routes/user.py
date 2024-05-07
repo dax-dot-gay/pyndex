@@ -2,7 +2,17 @@ from typing import Any, Literal, Type
 from litestar import Controller, delete, get, post
 from pydantic import BaseModel
 from tinydb import where
-from ..models import AuthAdmin, AuthUser, AuthToken, AuthGroup, guard_admin
+from ..models import (
+    AuthAdmin,
+    AuthUser,
+    AuthToken,
+    AuthGroup,
+    guard_admin,
+    PermissionSpecModel,
+    AuthPermission,
+    MetaPermission,
+    PackagePermission,
+)
 from ..context import Context
 from litestar.connection import ASGIConnection
 from litestar.exceptions import *
@@ -205,5 +215,77 @@ class UserQueryController(Controller):
         return RedactedAuth.from_auth(user)
 
     @delete("/", guards=[guard_admin])
-    async def delete_user(self, user: Any) -> None:
+    async def delete_user(self, user: AuthUser | Any) -> None:
+        if isinstance(user, AuthAdmin):
+            raise MethodNotAllowedException("Cannot delete admin user.")
         user.delete()
+
+    @post("/permissions")
+    async def add_permission(
+        self, user: AuthUser | Any, data: PermissionSpecModel
+    ) -> list[PermissionSpecModel]:
+        if isinstance(user, AuthAdmin):
+            raise MethodNotAllowedException(
+                "Admin user does not support permissioning."
+            )
+
+        if data.permission in PackagePermission and not data.project:
+            raise ValidationException(
+                "Must specify `.project` if creating a package permission."
+            )
+
+        if data.permission in MetaPermission and data.project:
+            raise ValidationException(
+                "Cannot specify meta-permissions on specific projects."
+            )
+
+        if data.permission in MetaPermission and not user.is_admin:
+            raise NotAuthorizedException(
+                "Cannot add meta-permissions without meta.admin access."
+            )
+
+        if (
+            data.permission in PackagePermission
+            and user.check_access(data.project) != PackagePermission.MANAGE
+            and not user.is_admin
+        ):
+            raise NotAuthorizedException("Insufficient permissions to manage project")
+
+        current_permissions = [
+            i.permission for i in user.permissions(project=data.project)
+        ]
+        if data.permission in current_permissions:
+            return [
+                PermissionSpecModel(permission=i.permission, project=i.project)
+                for i in user.permissions()
+            ]
+
+        created = AuthPermission(
+            permission=data.permission,
+            target_type="auth",
+            target_id=user.id,
+            project=data.project,
+        )
+        created.save()
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in user.permissions()
+        ]
+
+    @get("/permissions")
+    async def list_permissions(
+        self, user: AuthUser | None
+    ) -> list[PermissionSpecModel]:
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in user.permissions()
+        ]
+
+    @get("/permissions/{project:str}")
+    async def get_project_permissions(
+        self, user: AuthUser | None, project: str
+    ) -> list[PermissionSpecModel]:
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in user.permissions(project=project)
+        ]
