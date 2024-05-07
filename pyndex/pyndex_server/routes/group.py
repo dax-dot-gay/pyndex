@@ -1,11 +1,20 @@
-from typing import Literal
+from typing import Any, Literal
 from litestar import Controller, delete, get, post
 from litestar.exceptions import *
 from litestar.di import Provide
 from pydantic import BaseModel, computed_field
 from tinydb import where
 from .user import guard_auth_enabled, RedactedAuth
-from ..models.auth import guard_admin, AuthGroup, AuthUser, AuthToken
+from ..models.auth import (
+    guard_admin,
+    AuthGroup,
+    AuthUser,
+    AuthToken,
+    PackagePermission,
+    MetaPermission,
+    PermissionSpecModel,
+    AuthPermission,
+)
 from ..context import Context
 
 
@@ -128,3 +137,64 @@ class SpecificGroupController(Controller):
     @delete("/", guards=[guard_admin])
     async def delete_group(self, group: AuthGroup) -> None:
         group.delete()
+
+    @post("/permissions")
+    async def add_permission(
+        self, auth: Any, group: AuthGroup, data: PermissionSpecModel
+    ) -> list[PermissionSpecModel]:
+        if data.permission in PackagePermission and not data.project:
+            raise ValidationException(
+                "Must specify `.project` if creating a package permission."
+            )
+
+        if data.permission in MetaPermission and data.project:
+            raise ValidationException(
+                "Cannot specify meta-permissions on specific projects."
+            )
+
+        if data.permission in MetaPermission and not auth.is_admin:
+            raise NotAuthorizedException(
+                "Cannot add meta-permissions without meta.admin access."
+            )
+
+        if data.permission in PackagePermission and auth.has_permission(
+            PackagePermission.MANAGE, project=data.project
+        ):
+            raise NotAuthorizedException("Insufficient permissions to manage project")
+
+        current_permissions = [
+            i.permission for i in group.permissions(project=data.project)
+        ]
+        if data.permission in current_permissions:
+            return [
+                PermissionSpecModel(permission=i.permission, project=i.project)
+                for i in group.permissions()
+            ]
+
+        created = AuthPermission(
+            permission=data.permission,
+            target_type="group",
+            target_id=group.id,
+            project=data.project,
+        )
+        created.save()
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in group.permissions()
+        ]
+
+    @get("/permissions")
+    async def list_permissions(self, group: AuthGroup) -> list[PermissionSpecModel]:
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in group.permissions()
+        ]
+
+    @get("/permissions/{project:str}")
+    async def get_project_permissions(
+        self, group: AuthGroup, project: str
+    ) -> list[PermissionSpecModel]:
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in group.permissions(project=project)
+        ]

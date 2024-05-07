@@ -17,6 +17,9 @@ class UserRequest(BaseModel):
     password: str | None = None
     groups: list[str] = []
     server_permissions: list[Literal["meta.admin", "meta.create"]] = []
+    package_permissions: list[
+        tuple[str, Literal["pkg.manage", "pkg.edit", "pkg.view"]]
+    ] = []
 
 
 class GroupRequest(BaseModel):
@@ -24,6 +27,9 @@ class GroupRequest(BaseModel):
     name: str
     display_name: str | None = None
     server_permissions: list[Literal["meta.admin", "meta.create"]] = []
+    package_permissions: list[
+        tuple[str, Literal["pkg.manage", "pkg.edit", "pkg.view"]]
+    ] = []
 
 
 class PackageRequest(BaseModel):
@@ -76,12 +82,36 @@ def env(tmp_path_factory: pytest.TempPathFactory, request):
             for group in requests.group:
                 index.groups.create(group.name, display_name=group.display_name)
 
+                for perm in group.server_permissions:
+                    client.post(
+                        f"/groups/name/{group.name}/permissions",
+                        json={"permission": perm},
+                    )
+
+                for perm in group.package_permissions:
+                    client.post(
+                        f"/groups/name/{group.name}/permissions",
+                        json={"permission": perm[1], "project": perm[0]},
+                    )
+
             for user in requests.user:
                 created = index.users.create(user.username, password=user.password)
                 for group in user.groups:
                     client.post(
                         f"/groups/name/{group}/members",
                         params={"auth_type": "user", "auth_id": created.id},
+                    )
+
+                for perm in user.server_permissions:
+                    client.post(
+                        f"/users/name/{user.username}/permissions",
+                        json={"permission": perm},
+                    )
+
+                for perm in user.package_permissions:
+                    client.post(
+                        f"/users/name/{user.username}/permissions",
+                        json={"permission": perm[1], "project": perm[0]},
                     )
 
     for package in requests.package:

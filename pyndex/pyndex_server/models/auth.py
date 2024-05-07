@@ -25,12 +25,25 @@ from ...common import (
 
 
 class AuthBase:
-    def permissions(self, project: str | None = None) -> list["AuthPermission"]:
-        return AuthPermission.get_permissions(self, project=project)
+
+    def permissions(
+        self, project: str | None = None, exclude_groups: bool = False
+    ) -> list["AuthPermission"]:
+        perms = AuthPermission.get_permissions(self, project=project)
+        if hasattr(self, "groups") and not exclude_groups:
+            for group_id in self.groups:
+                group: AuthGroup = AuthGroup.get(group_id)
+                if group:
+                    perms.extend(group.permissions(project=project))
+        return perms
 
     @cached_property
     def is_admin(self) -> bool:
         return any([i.permission == MetaPermission.ADMIN for i in self.permissions()])
+
+    @cached_property
+    def is_uploader(self) -> bool:
+        return any([i.permission == MetaPermission.CREATE for i in self.permissions()])
 
     def check_access(self, project: str) -> PackagePermission | None:
         results = self.permissions(project=project)
@@ -45,6 +58,40 @@ class AuthBase:
         elif PackagePermission.VIEW in bare:
             return PackagePermission.VIEW
         return None
+
+    def has_permission(
+        self, permission: MetaPermission | PackagePermission, project: str | None = None
+    ) -> bool:
+        perms = self.permissions()
+        metas = [i.permission for i in perms if i.permission in MetaPermission]
+        pkgs = [
+            i.permission
+            for i in perms
+            if i.permission in PackagePermission and i.project == project
+        ]
+
+        match permission:
+            case MetaPermission.ADMIN:
+                return MetaPermission.ADMIN in metas
+            case MetaPermission.CREATE:
+                return MetaPermission.CREATE in metas or MetaPermission.ADMIN
+            case PackagePermission.MANAGE:
+                return PackagePermission.MANAGE in pkgs or MetaPermission.ADMIN in metas
+            case PackagePermission.EDIT:
+                return (
+                    PackagePermission.EDIT in pkgs
+                    or PackagePermission.MANAGE in pkgs
+                    or MetaPermission.ADMIN in metas
+                )
+            case PackagePermission.VIEW:
+                return (
+                    PackagePermission.VIEW in pkgs
+                    or PackagePermission.EDIT in pkgs
+                    or PackagePermission.MANAGE in pkgs
+                    or MetaPermission.ADMIN in metas
+                )
+
+        return False
 
 
 class AuthAdmin(_AuthAdmin, AuthBase):
@@ -211,4 +258,4 @@ async def guard_admin(connection: ASGIConnection, _: BaseRouteHandler) -> None:
 
 class PermissionSpecModel(BaseModel):
     permission: MetaPermission | PackagePermission
-    project: str | None
+    project: str | None = None

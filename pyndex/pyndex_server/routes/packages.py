@@ -1,7 +1,8 @@
 from litestar import Controller, post, get, Request
 import os
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 from httpx import AsyncClient
+
 from ..models import (
     FileMetadata,
     Package,
@@ -9,6 +10,11 @@ from ..models import (
     PackageListItem,
     PackageDetail,
     APIMeta,
+    AuthUser,
+    AuthAdmin,
+    PackagePermission,
+    MetaPermission,
+    AuthPermission,
 )
 from ..context import Context
 from litestar.enums import RequestEncodingType
@@ -27,12 +33,14 @@ class PackageController(Controller):
         self,
         context: Context,
         data: Annotated[FileMetadata, Body(media_type=RequestEncodingType.MULTI_PART)],
+        auth: AuthUser | Any,
     ) -> FileMetadata:
         """Uploads a file to the index
 
         Args:
             context (Context): Application context
             data (Annotated[FileMetadata, Body, optional): Multipart form data containing file metadata & the file blob itself. Metadata format from `https://warehouse.pypa.io/api-reference/legacy.html#upload-api`
+            auth (AuthUser | AuthToken | AuthAdmin)
 
         Raises:
             MethodNotAllowedException: Raised if the file already exists
@@ -40,12 +48,33 @@ class PackageController(Controller):
         Returns:
             FileMetadata: Metadata about the uploaded file
         """
+        new_package = False
+        if data.name in os.listdir(str(context.root.joinpath("index"))):
+            if not auth.has_permission(PackagePermission.EDIT, project=data.name):
+                raise NotAuthorizedException(
+                    "Cannot upload to existing package without permission."
+                )
+        else:
+            if not auth.has_permission(MetaPermission.CREATE):
+                raise NotAuthorizedException(
+                    "Cannot upload new package without permission."
+                )
+            new_package = True
+
         try:
             await data.save(str(context.root.joinpath("index")))
         except FileExistsError:
             raise MethodNotAllowedException(
                 detail="Cannot overwrite an existing version of a package."
             )
+
+        if not isinstance(auth, AuthAdmin) and new_package:
+            AuthPermission(
+                permission=PackagePermission.MANAGE,
+                target_type="auth",
+                target_id=auth.id,
+                project=data.name,
+            ).save()
 
         return data
 
@@ -54,7 +83,12 @@ class PackageController(Controller):
         response_headers={"Content-Type": "application/vnd.pypi.simple.v1+json"},
     )
     async def get_file_info(
-        self, context: Context, project_name: str, request: Request, local: bool = False
+        self,
+        context: Context,
+        project_name: str,
+        request: Request,
+        auth: AuthUser | Any,
+        local: bool = False,
     ) -> PackageDetail:
         """Retrieves a list of files associated with the given project (across all versions)
 
@@ -70,6 +104,9 @@ class PackageController(Controller):
         Returns:
             PackageDetail: Details about the package. Format based on `https://packaging.python.org/en/latest/specifications/simple-repository-api/#project-detail`
         """
+        if not auth.has_permission(PackagePermission.VIEW, project=project_name):
+            raise NotFoundException("Unknown or inaccessible project.")
+
         if not os.path.exists(context.root.joinpath("index", project_name)):
             if len(context.config.proxies) > 0 and not local:
                 for proxy in context.config.proxies:
@@ -90,7 +127,9 @@ class PackageController(Controller):
         return package.detail(url_base=base_url)
 
     @get("/", response_headers={"Content-Type": "application/vnd.pypi.simple.v1+json"})
-    async def get_file_list(self, context: Context) -> PackageList:
+    async def get_file_list(
+        self, context: Context, auth: AuthUser | Any
+    ) -> PackageList:
         """Returns a list of all packages on the local index. Does not include proxied packages to avoid duplication & confusion
 
         Args:
@@ -101,7 +140,12 @@ class PackageController(Controller):
         """
         names = os.listdir(context.root.joinpath("index"))
         return PackageList(
-            meta=APIMeta(), projects=[PackageListItem(name=name) for name in names]
+            meta=APIMeta(),
+            projects=[
+                PackageListItem(name=name)
+                for name in names
+                if auth.has_permission(PackagePermission.VIEW, project=name)
+            ],
         )
 
     @get("/detail/{project_name:str}")
@@ -110,6 +154,7 @@ class PackageController(Controller):
         context: Context,
         project_name: str,
         request: Request,
+        auth: AuthUser | Any,
         local: Optional[bool] = False,
     ) -> Package:
         """Gets in-depth information about a specific package's latest version
@@ -126,6 +171,8 @@ class PackageController(Controller):
         Returns:
             Package: Package details. Based on `https://warehouse.pypa.io/api-reference/json.html#project`
         """
+        if not auth.has_permission(PackagePermission.VIEW, project=project_name):
+            raise NotFoundException("Unknown or inaccessible project.")
         try:
             return Package.assemble_package(
                 context.root.joinpath("index", project_name), url_base=request.base_url
@@ -149,6 +196,7 @@ class PackageController(Controller):
         project_name: str,
         version: str,
         request: Request,
+        auth: AuthUser | Any,
         local: Optional[bool] = False,
     ) -> Package:
         """Gets in-depth information about a specific package's specified version
@@ -166,6 +214,8 @@ class PackageController(Controller):
         Returns:
             Package: Package details. Based on `https://warehouse.pypa.io/api-reference/json.html#release`
         """
+        if not auth.has_permission(PackagePermission.VIEW, project=project_name):
+            raise NotFoundException("Unknown or inaccessible project.")
         try:
             return Package.assemble_package(
                 context.root.joinpath("index", project_name),

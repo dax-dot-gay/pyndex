@@ -222,7 +222,7 @@ class UserQueryController(Controller):
 
     @post("/permissions")
     async def add_permission(
-        self, user: AuthUser | Any, data: PermissionSpecModel
+        self, auth: Any, user: AuthUser | Any, data: PermissionSpecModel
     ) -> list[PermissionSpecModel]:
         if isinstance(user, AuthAdmin):
             raise MethodNotAllowedException(
@@ -239,20 +239,19 @@ class UserQueryController(Controller):
                 "Cannot specify meta-permissions on specific projects."
             )
 
-        if data.permission in MetaPermission and not user.is_admin:
+        if data.permission in MetaPermission and not auth.is_admin:
             raise NotAuthorizedException(
                 "Cannot add meta-permissions without meta.admin access."
             )
 
-        if (
-            data.permission in PackagePermission
-            and user.check_access(data.project) != PackagePermission.MANAGE
-            and not user.is_admin
+        if data.permission in PackagePermission and not auth.has_permission(
+            PackagePermission.MANAGE, project=data.project
         ):
             raise NotAuthorizedException("Insufficient permissions to manage project")
 
         current_permissions = [
-            i.permission for i in user.permissions(project=data.project)
+            i.permission
+            for i in user.permissions(project=data.project, exclude_groups=True)
         ]
         if data.permission in current_permissions:
             return [
@@ -273,9 +272,7 @@ class UserQueryController(Controller):
         ]
 
     @get("/permissions")
-    async def list_permissions(
-        self, user: AuthUser | None
-    ) -> list[PermissionSpecModel]:
+    async def list_permissions(self, user: AuthUser | Any) -> list[PermissionSpecModel]:
         return [
             PermissionSpecModel(permission=i.permission, project=i.project)
             for i in user.permissions()
@@ -283,7 +280,7 @@ class UserQueryController(Controller):
 
     @get("/permissions/{project:str}")
     async def get_project_permissions(
-        self, user: AuthUser | None, project: str
+        self, user: AuthUser | Any, project: str
     ) -> list[PermissionSpecModel]:
         return [
             PermissionSpecModel(permission=i.permission, project=i.project)

@@ -31,7 +31,9 @@ class TestAdmin:
 @pytest.mark.user(username="basic", password="basic", groups=["general"])
 @pytest.mark.user(username="moderator", password="admin", groups=["admins"])
 @pytest.mark.group(name="general")
-@pytest.mark.group(name="admins", display_name="Administrators")
+@pytest.mark.group(
+    name="admins", display_name="Administrators", server_permissions=["meta.admin"]
+)
 @pytest.mark.package(dist="dist/*", username="admin", password="admin")
 @pytest.mark.parametrize(
     ["username", "password"], [("basic", "basic"), ("moderator", "admin")]
