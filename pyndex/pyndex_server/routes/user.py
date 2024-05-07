@@ -286,3 +286,26 @@ class UserQueryController(Controller):
             PermissionSpecModel(permission=i.permission, project=i.project)
             for i in user.permissions(project=project)
         ]
+
+    @delete("/permissions")
+    async def remove_permission(
+        self, user: AuthUser | Any, auth: AuthUser | Any, data: PermissionSpecModel
+    ) -> None:
+        if data.permission in MetaPermission and not auth.has_permission(
+            MetaPermission.ADMIN
+        ):
+            raise NotAuthorizedException("Insufficient permissions")
+
+        if data.permission in PackagePermission and not auth.has_permission(
+            PackagePermission.MANAGE, project=data.project
+        ):
+            raise NotAuthorizedException("Insufficient permissions")
+
+        result = AuthPermission.find_one(
+            (where("target_type") == "auth")
+            & (where("target_id") == user.id)
+            & (where("permission") == data.permission)
+            & (where("project") == data.project)
+        )
+        if result:
+            result.delete()

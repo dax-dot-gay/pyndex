@@ -198,3 +198,26 @@ class SpecificGroupController(Controller):
             PermissionSpecModel(permission=i.permission, project=i.project)
             for i in group.permissions(project=project)
         ]
+
+    @delete("/permissions")
+    async def remove_permission(
+        self, group: AuthGroup, auth: AuthUser | Any, data: PermissionSpecModel
+    ) -> None:
+        if data.permission in MetaPermission and not auth.has_permission(
+            MetaPermission.ADMIN
+        ):
+            raise NotAuthorizedException("Insufficient permissions")
+
+        if data.permission in PackagePermission and not auth.has_permission(
+            PackagePermission.MANAGE, project=data.project
+        ):
+            raise NotAuthorizedException("Insufficient permissions")
+
+        result = AuthPermission.find_one(
+            (where("target_type") == "group")
+            & (where("target_id") == group.id)
+            & (where("permission") == data.permission)
+            & (where("project") == data.project)
+        )
+        if result:
+            result.delete()
