@@ -107,7 +107,7 @@ class SpecificGroupController(Controller):
         self,
         group: AuthGroup,
         auth_type: Literal["user", "token"],
-        auth_id: str | None = None,
+        auth_id: str,
     ) -> list[RedactedAuth]:
         match auth_type:
             case "user":
@@ -133,6 +133,25 @@ class SpecificGroupController(Controller):
     @get("/members")
     async def get_group_members(self, group: AuthGroup) -> list[RedactedAuth]:
         return [RedactedAuth.from_auth(i) for i in group.get_members()]
+
+    @delete("/members")
+    async def remove_member(
+        self,
+        group: AuthGroup,
+        auth_type: Literal["user", "token"],
+        auth_id: str,
+    ) -> None:
+        match auth_type:
+            case "user":
+                auth = AuthUser.get(auth_id)
+            case "token":
+                auth = AuthToken.get(auth_id)
+
+        if not auth:
+            raise NotFoundException("Unknown auth ID")
+
+        auth.groups = [i for i in auth.groups if i != group.id]
+        auth.save()
 
     @delete("/", guards=[guard_admin])
     async def delete_group(self, group: AuthGroup) -> None:
@@ -199,10 +218,10 @@ class SpecificGroupController(Controller):
             for i in group.permissions(project=project)
         ]
 
-    @delete("/permissions")
+    @post("/permissions/delete")
     async def remove_permission(
         self, group: AuthGroup, auth: AuthUser | Any, data: PermissionSpecModel
-    ) -> None:
+    ) -> list[PermissionSpecModel]:
         if data.permission in MetaPermission and not auth.has_permission(
             MetaPermission.ADMIN
         ):
@@ -221,3 +240,8 @@ class SpecificGroupController(Controller):
         )
         if result:
             result.delete()
+
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in group.permissions()
+        ]
