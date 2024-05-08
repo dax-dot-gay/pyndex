@@ -1,5 +1,7 @@
 from functools import cached_property
 from typing import Any
+
+from httpx import BasicAuth
 from .base import BaseOperator, BaseOperatorModel
 from ..util import BaseInstance, ApiError
 from pyndex.common import (
@@ -91,6 +93,9 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
         )
         if not result.is_success:
             raise ApiError.from_response(result)
+
+        self.instance.client.auth = BasicAuth(self.instance.username, new_password)
+        self.instance.password = new_password
 
 
 class UserOperator(BaseOperator):
