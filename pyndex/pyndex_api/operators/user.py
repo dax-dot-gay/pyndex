@@ -2,13 +2,95 @@ from functools import cached_property
 from typing import Any
 from .base import BaseOperator, BaseOperatorModel
 from ..util import BaseInstance, ApiError
-from pyndex.common import RedactedAuth
+from pyndex.common import (
+    RedactedAuth,
+    MetaPermission,
+    PackagePermission,
+    PermissionSpecModel,
+)
 
 
 class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
+    current: bool = False
     def __init__(self, operator: "UserOperator" = None, **data):
         super().__init__(**data)
         self._operator = operator
+
+    def delete(self) -> None:
+        if self.current:
+            result = self.client.delete(self.url("users", "self"))
+            if not result.is_success:
+                raise ApiError.from_response(result)
+
+        else:
+            result = self.client.delete(self.url("users", "id", self.id))
+            if not result.is_success:
+                raise ApiError.from_response(result)
+
+    def add_permission(self, spec: PermissionSpecModel) -> list[PermissionSpecModel]:
+        result = self.client.post(
+            self.url("users", "id", self.id, "permissions"),
+            json=spec.model_dump(mode="json"),
+        )
+        if result.is_success:
+            return [PermissionSpecModel(**i) for i in result.json()]
+        raise ApiError.from_response(result)
+
+    def add_server_permission(
+        self, permission: MetaPermission
+    ) -> list[PermissionSpecModel]:
+        return self.add_permission(PermissionSpecModel(permission=permission))
+
+    def add_package_permission(
+        self, permission: PackagePermission, package: str
+    ) -> list[PermissionSpecModel]:
+        return self.add_permission(
+            PermissionSpecModel(permission=permission, project=package)
+        )
+
+    def get_permissions(self, project: str | None = None) -> list[PermissionSpecModel]:
+        if project:
+            result = self.client.get(
+                self.url("users", "id", self.id, "permissions", project)
+            )
+        else:
+            result = self.client.get(self.url("users", "id", self.id, "permissions"))
+        if result.is_success:
+            return [PermissionSpecModel(**i) for i in result.json()]
+        raise ApiError.from_response(result)
+
+    def delete_permission(self, spec: PermissionSpecModel) -> list[PermissionSpecModel]:
+        result = self.client.post(
+            self.url("users", "id", self.id, "permissions", "delete"),
+            json=spec.model_dump(mode="json"),
+        )
+        if result.is_success:
+            return [PermissionSpecModel(**i) for i in result.json()]
+        raise ApiError.from_response(result)
+
+    def delete_server_permission(
+        self, permission: MetaPermission
+    ) -> list[PermissionSpecModel]:
+        return self.delete_permission(PermissionSpecModel(permission=permission))
+
+    def delete_package_permission(
+        self, permission: PackagePermission, package: str
+    ) -> list[PermissionSpecModel]:
+        return self.delete_permission(
+            PermissionSpecModel(permission=permission, project=package)
+        )
+
+    def change_password(
+        self, current_password: str | None, new_password: str | None
+    ) -> None:
+        if not self.current:
+            raise RuntimeError("Cannot change password of non-current user")
+        result = self.client.post(
+            self.url("users", "self", "password"),
+            json={"new": new_password, "current": current_password},
+        )
+        if not result.is_success:
+            raise ApiError.from_response(result)
 
 
 class UserOperator(BaseOperator):
@@ -67,7 +149,7 @@ class UserOperator(BaseOperator):
         """
         result = self.client.get(self.url("users", "self"))
         if result.is_success:
-            return UserItem(operator=self, **result.json())
+            return UserItem(operator=self, **result.json(), current=True)
 
         raise ApiError.from_response(result)
 

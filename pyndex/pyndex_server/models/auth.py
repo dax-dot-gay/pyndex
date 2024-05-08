@@ -21,6 +21,7 @@ from ...common import (
     AuthToken as _AuthToken,
     MetaPermission,
     PackagePermission,
+    PermissionSpecModel,
 )
 
 
@@ -104,22 +105,21 @@ class AuthUser(_AuthUser, BaseObject, AuthBase):
     _collection = "creds"
 
     @staticmethod
-    def make_password(password: str) -> tuple[str, str]:
-        password_salt = os.urandom(32).hex()
-        password_hash = pbkdf2_hmac(
-            "sha256", password.encode(), bytes.fromhex(password_salt), 100000
-        ).hex()
+    def make_password(password: str | None) -> tuple[str, str]:
+        if password:
+            password_salt = os.urandom(32).hex()
+            password_hash = pbkdf2_hmac(
+                "sha256", password.encode(), bytes.fromhex(password_salt), 100000
+            ).hex()
+        else:
+            password_salt = None
+            password_hash = None
 
         return password_hash, password_salt
 
     @classmethod
     def create(cls, username: str, password: str | None = None) -> "AuthUser":
-        if password:
-            password_hash, password_salt = cls.make_password(password)
-        else:
-            password_salt = None
-            password_hash = None
-
+        password_hash, password_salt = cls.make_password(password)
         return AuthUser(
             username=username, password_hash=password_hash, password_salt=password_salt
         )
@@ -260,8 +260,3 @@ async def guard_admin(connection: ASGIConnection, _: BaseRouteHandler) -> None:
         raise NotAuthorizedException(
             "Access to this endpoint is forbidden without the meta.admin permission."
         )
-
-
-class PermissionSpecModel(BaseModel):
-    permission: MetaPermission | PackagePermission
-    project: str | None = None

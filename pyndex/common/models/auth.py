@@ -63,3 +63,8 @@ class AuthPermission(BaseModel):
     target_type: Literal["group", "auth"]
     target_id: str
     project: str | None = None
+
+
+class PermissionSpecModel(BaseModel):
+    permission: MetaPermission | PackagePermission
+    project: str | None = None

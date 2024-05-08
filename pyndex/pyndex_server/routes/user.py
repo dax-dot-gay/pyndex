@@ -179,8 +179,8 @@ async def provide_user_query(
 
 
 class PasswordChangeModel(BaseModel):
-    current: str
-    new: str
+    current: str | None
+    new: str | None
 
 
 class UserSelfController(Controller):
@@ -312,10 +312,10 @@ class UserQueryController(Controller):
             for i in user.permissions(project=project)
         ]
 
-    @delete("/permissions")
+    @post("/permissions/delete")
     async def remove_permission(
         self, user: AuthUser | Any, auth: AuthUser | Any, data: PermissionSpecModel
-    ) -> None:
+    ) -> list[PermissionSpecModel]:
         if data.permission in MetaPermission and not auth.has_permission(
             MetaPermission.ADMIN
         ):
@@ -334,3 +334,8 @@ class UserQueryController(Controller):
         )
         if result:
             result.delete()
+
+        return [
+            PermissionSpecModel(permission=i.permission, project=i.project)
+            for i in user.permissions()
+        ]
