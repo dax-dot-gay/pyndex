@@ -103,13 +103,19 @@ class AuthAdmin(_AuthAdmin, AuthBase):
 class AuthUser(_AuthUser, BaseObject, AuthBase):
     _collection = "creds"
 
+    @staticmethod
+    def make_password(password: str) -> tuple[str, str]:
+        password_salt = os.urandom(32).hex()
+        password_hash = pbkdf2_hmac(
+            "sha256", password.encode(), bytes.fromhex(password_salt), 100000
+        ).hex()
+
+        return password_hash, password_salt
+
     @classmethod
     def create(cls, username: str, password: str | None = None) -> "AuthUser":
         if password:
-            password_salt = os.urandom(32).hex()
-            password_hash = pbkdf2_hmac(
-                "sha256", password.encode(), bytes.fromhex(password_salt), 100000
-            ).hex()
+            password_hash, password_salt = cls.make_password(password)
         else:
             password_salt = None
             password_hash = None

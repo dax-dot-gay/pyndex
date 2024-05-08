@@ -178,6 +178,11 @@ async def provide_user_query(
         raise NotFoundException("Unknown user ID")
 
 
+class PasswordChangeModel(BaseModel):
+    current: str
+    new: str
+
+
 class UserSelfController(Controller):
     """Operations pertaining to the currently logged-in user"""
     path = "/users/self"
@@ -193,6 +198,26 @@ class UserSelfController(Controller):
         Returns:
             RedactedAuth: Active user info
         """
+        return RedactedAuth.from_auth(auth)
+
+    @delete("/")
+    async def delete_self(self, auth: Any) -> None:
+        if isinstance(auth, AuthAdmin):
+            raise ClientException("Cannot delete admin.")
+        auth.delete()
+
+    @post("/password")
+    async def change_password(
+        self, auth: AuthUser | Any, data: PasswordChangeModel
+    ) -> RedactedAuth:
+        if isinstance(auth, AuthAdmin):
+            raise ClientException("Cannot change admin password from API")
+
+        if not auth.verify(data.current):
+            raise NotAuthorizedException("Incorrect current password")
+
+        auth.password_hash, auth.password_salt = auth.make_password(data.new)
+        auth.save()
         return RedactedAuth.from_auth(auth)
 
 
