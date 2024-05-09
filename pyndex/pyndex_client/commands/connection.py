@@ -8,6 +8,7 @@ import urllib.parse
 @click.group(name="connection", invoke_without_command=True, cls=AliasedGroup)
 @click.pass_context
 def connection(ctx: click.Context):
+    """Operate on configured connections & logins."""
     obj: AppContext = ctx.obj
 
     if ctx.invoked_subcommand == None:

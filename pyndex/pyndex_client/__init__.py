@@ -46,3 +46,4 @@ def main(ctx: click.Context, repo: str | None, config: str | None):
             ctx.obj.error("No connection is configured/active.")
 
 main.add_command(connection)
+main.add_command(package)
