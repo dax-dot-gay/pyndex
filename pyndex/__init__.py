@@ -14,3 +14,4 @@ except ImportError:
 
 from .common import *
 from .pyndex_api import Pyndex
+from .version import *
