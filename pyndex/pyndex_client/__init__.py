@@ -4,6 +4,10 @@ import platformdirs
 from .models import AppContext
 from ..version import *
 from .util import AliasedGroup
+from .commands import *
+import logging
+
+logging.getLogger("httpx").setLevel(logging.CRITICAL)
 
 
 @click.group(invoke_without_command=True, cls=AliasedGroup)
@@ -40,3 +44,5 @@ def main(ctx: click.Context, repo: str | None, config: str | None):
     else:
         if ctx.invoked_subcommand != "connection" and not ctx.obj.client:
             ctx.obj.error("No connection is configured/active.")
+
+main.add_command(connection)

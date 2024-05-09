@@ -64,7 +64,7 @@ class AppContext(BaseModel):
                 api_base=repo.base_url,
                 username=repo.username,
                 password=repo.username,
-            ) as index:
+            ).session() as index:
                 yield AppContext(
                     repo=repo,
                     config=config,
