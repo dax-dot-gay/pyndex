@@ -1,4 +1,3 @@
-from email.policy import default
 from typing import Callable
 import click
 from ..util import AliasedGroup
