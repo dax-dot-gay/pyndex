@@ -60,3 +60,20 @@ def list_users(obj: AppContext, permissions: bool):
                         )
             else:
                 obj.console.print("    [italic]Permissions: [/] -")
+
+
+@user.command("delete")
+@click.argument("username")
+@click.pass_obj
+def delete_user(obj: AppContext, username: str):
+    """Deletes a user by USERNAME"""
+    try:
+        user = obj.client.users(username=username)
+        if user == None:
+            obj.error(f"Unknown user {username}")
+            raise click.Abort()
+
+        user.delete()
+        obj.console.print(f"Deleted user {username}.")
+    except ApiError as e:
+        obj.error(f"Failed to delete user: {e.detail}")
