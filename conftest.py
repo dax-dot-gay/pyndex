@@ -128,7 +128,7 @@ def env(tmp_path_factory: pytest.TempPathFactory, request):
                 index.package.upload(package.dist)
 
     yield directory
-    shutil.copyfile("./config.toml.dev", "config.toml")
+    shutil.copyfile("config.toml.dev", "config.toml")
     os.remove("config.toml.dev")
 
 
