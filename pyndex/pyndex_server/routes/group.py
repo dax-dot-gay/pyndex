@@ -176,7 +176,7 @@ class SpecificGroupController(Controller):
                 "Cannot add meta-permissions without meta.admin access."
             )
 
-        if data.permission in PackagePermission and auth.has_permission(
+        if data.permission in PackagePermission and not auth.has_permission(
             PackagePermission.MANAGE, project=data.project
         ):
             raise NotAuthorizedException("Insufficient permissions to manage project")

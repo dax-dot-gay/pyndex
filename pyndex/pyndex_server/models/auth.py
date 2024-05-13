@@ -70,7 +70,6 @@ class AuthBase:
             for i in perms
             if i.permission in PackagePermission and i.project == project
         ]
-
         match permission:
             case MetaPermission.ADMIN:
                 return MetaPermission.ADMIN in metas
