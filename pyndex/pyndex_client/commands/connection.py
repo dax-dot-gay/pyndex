@@ -1,135 +1,116 @@
 import click
-from ..models import *
-from pyndex.common import Pyndex
+from ..util import AliasedGroup
+from ..models import AppContext, ConfigEntry
+from ...pyndex_api import Pyndex
 import urllib.parse
-from ..util import AliasResolver
 
 
-@click.group("connection", invoke_without_command=True, cls=AliasResolver)
+@click.group(name="connection", invoke_without_command=True, cls=AliasedGroup)
 @click.pass_context
 def connection(ctx: click.Context):
-    """Contains commands pertaining to the active connection. When invoked alone, prints out information about the currently active connection."""
-    if ctx.invoked_subcommand == None:
-        context: Context = ctx.obj
-        if context.repo:
-            context.console.print(
-                f"[green][bold]Active Connection:[/bold][/green]\t{context.repo.name} @ {context.repo.url}"
-            )
+    """Operate on configured connections & logins."""
+    obj: AppContext = ctx.obj
 
-            with context.index() as index:
-                if index.user:
-                    context.console.print(
-                        f"[green][bold]Active User:[/bold][/green]\t\t{index.user.name if index.user.name else 'anonymous'}"
-                    )
-                else:
-                    context.console.print(
-                        f"[red][bold]Error:[/bold]\t\tAttempt to login to {context.repo.name} as {context.repo.username} failed"
-                    )
+    if ctx.invoked_subcommand == None:
+        if obj.client:
+            obj.console.print(
+                f"[bold]Active Connection:[/] {obj.repo.name} ({obj.repo.host.rstrip('/')}{'/' + obj.repo.base_url.lstrip('/') if obj.repo.base_url else ''})"
+            )
+            try:
+                current = obj.client.users.active
+            except:
+                obj.error("Login failure.")
+                raise click.Abort()
+
+            obj.console.print(f"\t[bold]Username:[/] {current.name}")
+            obj.console.print(
+                f"\t[bold]Groups:[/] {', '.join([i.display_name + ' (' + i.name + ')' for i in current.groups])}"
+            )
         else:
-            context.console.print(f"[red]No active connection.")
+            obj.console.print("[bold]Active Connection:[/] None")
 
 
 @connection.command("add")
-@click.argument("url", type=str)
+@click.argument("host")
+@click.option("--name", "-n", "name", help="Connection name (optional)")
 @click.option(
-    "--name",
-    "-n",
-    "name",
-    default=None,
-    type=str,
-    help="The name to call this connection in the config. If not specified, defaults to the domain name of URL",
+    "--base-url", "-b", "base_url", help="Base API URL (optional)", default=""
 )
-@click.option(
-    "--username",
-    "-u",
-    "username",
-    default=None,
-    type=str,
-    help="Username for the selected index",
-)
-@click.option(
-    "--password",
-    "-p",
-    "password",
-    default=None,
-    type=str,
-    help="Password for the selected index",
-)
-@click.option(
-    "--token",
-    "-t",
-    "token",
-    default=None,
-    type=str,
-    help="API token for the selected index",
-)
-@click.option(
-    "--default/--no-default",
-    "default",
-    default=False,
-    help="Whether to set this index as the default (ignored if no default is currently set)",
-)
+@click.option("--username", "-u", "username", help="Username for connection (optional)")
+@click.option("--password", "-p", "password", help="Password for connection (optional)")
 @click.pass_obj
 def add_connection(
-    obj: Context,
-    url: str,
+    obj: AppContext,
+    host: str,
     name: str | None,
+    base_url: str | None,
     username: str | None,
     password: str | None,
-    token: str | None,
-    default: bool,
 ):
-    """
-    Adds the Pyndex instance at URL to the local configuration.
-    """
-
+    """Add a connection to HOST with optional parameters."""
     if not name:
-        name = urllib.parse.urlparse(url).hostname
+        name = urllib.parse.urlparse(host).hostname
 
-    with Pyndex(url, username=username, password=password, token=token) as index:
-        user = index.user
-        if not user:
-            obj.console.print(
-                "[red][bold]Error:[/bold] Invalid credentials supplied.[/red]"
-            )
+    with Pyndex(
+        host, api_base=base_url, username=username, password=password
+    ).session() as index:
+        try:
+            active = index.users.active
+        except:
+            obj.error("Failed to authenticate against specified connection.")
             raise click.Abort()
-
-        obj.console.print(f"Connected as {user.name}. Saving connection as {name}...")
-
-    index = PyndexIndex(
-        name=name, url=url, username=username, password=password, token=token
+    new_entry = ConfigEntry(
+        name=name, host=host, base_url=base_url, username=username, password=password
     )
-    obj.config.index[name] = index
-    if default or not obj.config.default:
+    obj.config.repositories[new_entry.name] = new_entry
+    if not obj.config.default:
+        obj.config.default = new_entry.name
+
+    obj.console.print(f"[bold green]Connected:[/bold green] {active.name} @ {host}")
+
+
+@connection.command("default")
+@click.argument("name")
+@click.pass_obj
+def set_default_connection(obj: AppContext, name: str):
+    """Sets the default connection to NAME"""
+    if name in obj.config.repositories.keys():
         obj.config.default = name
-
-    obj.config.save(obj.config_file_path)
-
-
-@connection.command("rm")
-@click.argument("name", type=str)
-@click.pass_obj
-def remove_connection(obj: Context, name: str):
-    """Removes the connection called NAME from the local configuration"""
-
-    if not name in obj.config.index.keys():
-        obj.console.print("[red][bold]Error:[/bold] Unknown index name[/red]")
+        obj.console.print(
+            f"Set active connection to {name} ({obj.config.repositories[name].host})"
+        )
+    else:
+        obj.error(f"Unknown connection {name}")
         raise click.Abort()
 
-    if obj.config.default == name:
-        obj.config.default = None
 
-    del obj.config.index[name]
-    obj.config.save(obj.config_file_path)
-
-
-@connection.command("set")
-@click.argument("name", type=str)
+@connection.command("list")
 @click.pass_obj
-def set_default_connection(obj: Context, name: str):
-    """Sets connection NAME as the default"""
-    if not name in obj.config.index.keys():
-        obj.console.print("[red][bold]Error:[/bold] Unknown index name[/red]")
+def list_connections(obj: AppContext):
+    """List configured connections"""
+    obj.console.print("[bold]Configured Connections:")
+    for conn in obj.config.repositories.values():
+        obj.console.print(
+            f"[bold]* {conn.name}{' - ACTIVE' if conn.name == obj.config.default else ''}"
+        )
+        obj.console.print(f"\t[bold]Host:[/bold] {conn.host}")
+        obj.console.print(
+            f"\t[bold]Username:[/bold] {conn.username if conn.username else 'None'}"
+        )
+
+
+@connection.command("remove")
+@click.argument("name")
+@click.pass_obj
+def remove_connection(obj: AppContext, name: str):
+    """Remove connection NAME"""
+    if name in obj.config.repositories.keys():
+        to_remove = obj.config.repositories[name]
+        if obj.config.default == name:
+            obj.config.default = None
+
+        del obj.config.repositories[name]
+        obj.console.print(f"Removed connection {name}")
+    else:
+        obj.error(f"Unknown connection {name}")
         raise click.Abort()
-    obj.config.default = name
-    obj.config.save(obj.config_file_path)

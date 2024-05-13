@@ -1,133 +1,79 @@
-from ..util import AliasResolver
-from ..models import Context
-from pyndex.common import ApiError
 import click
+from ..util import AliasedGroup
+from ..models import AppContext
+from ...common import MetaPermission, PackagePermission
+from rich.markdown import Markdown
+from ...pyndex_api.util import ApiError
 
 
-@click.group("user", invoke_without_command=True, cls=AliasResolver)
-@click.pass_context
-def user(ctx: click.Context):
-    """Perform operations on users. When invoked alone, prints information about the current user."""
-    context: Context = ctx.obj
-    if not context.repo:
-        context.console.print("[red]No active connection.[/red]")
-        raise click.Abort()
-
-    if ctx.invoked_subcommand == None:
-        with context.index() as index:
-            result = index.user
-            if result == None:
-                context.console.print(
-                    f"[red][bold]Error:[/bold] Failed to login as {context.repo.username} to {context.repo.url}.[/red]"
-                )
-                raise click.Abort()
-
-            context.console.print(
-                f"[green][bold]Success:[/bold] Logged in to {context.repo.url}."
-            )
-            context.console.print(
-                f"[green][bold]Auth Type:[/bold][/green]\t{result.type}"
-            )
-            context.console.print(f"[green][bold]User:[/bold][/green]\t\t{result.name}")
-            context.console.print(
-                f"[green][bold]Groups:[/bold][/green]\t\t{', '.join([(i.display_name + '(' + i.name + ')') if i.display_name else i for i in result.groups])}"
-            )
-
-
-@user.command("create")
-@click.option(
-    "--username", "-u", "username", prompt="Username", help="Username for the new user"
-)
-@click.option(
-    "--password",
-    "-p",
-    "password",
-    prompt="Password",
-    hide_input=True,
-    confirmation_prompt=True,
-    prompt_required=False,
-    help="Password for the new user. If left blank, no password will be set.",
-)
-@click.pass_context
-def create_user(ctx: click.Context, username: str, password: str | None):
-    """
-    Creates a new user with a username & optional password. Can only be executed if the current user has the `meta.admin` permission.
-    """
-    context: Context = ctx.obj
-    with context.index() as index:
-        if not index.admin:
-            context.console.print(
-                "[bold red]Error:[/bold red]\t Active user does not have the `meta.admin` permission for this connection."
-            )
-            raise click.Abort()
-
-        try:
-            result = index.create_user(username, password=password)
-        except ApiError as e:
-            context.console.print(f"[bold red]API Error:[/bold red]\t {e.reason}")
-            raise click.Abort()
-
-        context.console.print(
-            f"[bold green]Success:[/bold green]\tCreated user {result.name}."
-        )
-
-
-@user.command("list")
-@click.pass_obj
-def list_users(obj: Context):
-    with obj.index() as index:
-        try:
-            result = index.get_users()
-        except ApiError as e:
-            obj.console.print(f"[bold red]API Error:[/bold red]\t {e.reason}")
-            raise click.Abort()
-
-        obj.console.print(f"[bold green]Existing Users:[/bold green]\n")
-        for user in result:
-            obj.console.print(
-                f"  - {user.name}{' (Active)' if user.id == index.user.id else ''}"
-            )
-            obj.console.print(
-                f"    [bold]Groups:[/bold] {', '.join([(i.display_name + '(' + i.name + ')') if i.display_name else i for i in user.groups])}\n"
-            )
-
-
-@user.group("modify", cls=AliasResolver)
-@click.option(
-    "--username", "-u", "username", prompt="Username", help="Username to modify"
-)
-@click.pass_context
-def modify_user(ctx: click.Context, username: str = None):
+@click.group("user", cls=AliasedGroup)
+def user():
+    """Commands related to user management."""
     pass
 
 
-@modify_user.command("groupadd")
+@user.command("create")
+@click.option("--username", "-u", "username", help="Username of user to create.")
+@click.option("--password", "-p", "password", help="Optional password to set")
+@click.pass_obj
+def create_user(obj: AppContext, username: str, password: str | None):
+    """Creates a new user with a username & optional password. Requires admin permissions."""
+    if not username:
+        obj.error("A username is required.")
+        raise click.Abort()
+
+    try:
+        result = obj.client.users.create(username, password=password)
+    except ApiError as e:
+        obj.error(f"Failed to create user: {e.detail}")
+        raise click.Abort()
+
+    obj.console.print(f"[bold]Success: [/bold]Created user {result.name}")
+
+
+@user.command("list")
 @click.option(
-    "--group",
-    "-g",
-    "group",
-    multiple=True,
-    help="The name of a group to add this user to. Can be specified multiple times.",
+    "--permissions", is_flag=True, help="Whether to display user permissions."
 )
-@click.pass_context
-def add_groups(ctx: click.Context, group: list[str]):
-    username = ctx.parent.params["username"]
-    context: Context = ctx.obj
-    with context.index() as index:
-        if not index.admin:
-            context.console.print(
-                "[bold red]Error:[/bold red]\t Active user does not have the `meta.admin` permission for this connection."
-            )
-            raise click.Abort()
-        try:
-            index.add_user_to_groups(username, group)
-        except ValueError:
-            context.console.print(f"[bold red]Error:[/bold red]\t Unknown username")
-            raise click.Abort()
-        except ApiError as e:
-            context.console.print(f"[bold red]API Error:[/bold red]\t {e.reason}")
+@click.pass_obj
+def list_users(obj: AppContext, permissions: bool):
+    """Lists all users on the current index."""
+    users = obj.client.users.all()
+    obj.console.print("[bold]Users:[/]")
+    for user in users:
+        obj.console.print(f"  * {user.name}")
+        obj.console.print(
+            f"    [italic]Groups: [/]{', '.join([group.name + (' ('+group.display_name+')' if group.display_name else '') for group in user.groups]) if len(user.groups) > 0 else '-'}"
+        )
+        if permissions:
+            perms = user.get_permissions()
+            if len(perms) > 0:
+                obj.console.print("    [italic]Permissions: [/]")
+                for perm in perms:
+                    if perm.permission in MetaPermission:
+                        obj.console.print(
+                            f"     - SERVER: {perm.permission.split('.')[1]}"
+                        )
+                    else:
+                        obj.console.print(
+                            f"     - PACKAGE {perm.project}: {perm.permission.split('.')[1]}"
+                        )
+            else:
+                obj.console.print("    [italic]Permissions: [/] -")
+
+
+@user.command("delete")
+@click.argument("username")
+@click.pass_obj
+def delete_user(obj: AppContext, username: str):
+    """Deletes a user by USERNAME"""
+    try:
+        user = obj.client.users(username=username)
+        if user == None:
+            obj.error(f"Unknown user {username}")
             raise click.Abort()
 
-        context.console.print(
-            f"[green bold]Success:[/bold green] Added {len(group)} group(s) to {username}."
-        )
+        user.delete()
+        obj.console.print(f"Deleted user {username}.")
+    except ApiError as e:
+        obj.error(f"Failed to delete user: {e.detail}")

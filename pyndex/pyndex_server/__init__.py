@@ -11,11 +11,11 @@ from .context import Context
 from .routes import make_api_router
 
 CONFIG = Config.load()
-CONTEXT = Context(CONFIG)
 
 
 async def on_start(app: Litestar):
-    app.state.context = CONTEXT
+    conf = Config.load()
+    app.state.context = Context(conf)
 
 
 async def provide_context(state: State) -> Context:

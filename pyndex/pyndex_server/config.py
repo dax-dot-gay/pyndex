@@ -1,3 +1,4 @@
+import os
 import tomllib
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -48,7 +49,7 @@ class Config(BaseModel):
 
     @classmethod
     def load(cls) -> "Config":
-        with open("./config.toml", "rb") as config:
+        with open(os.getenv("PYNDEX_CONFIG", "./config.toml"), "rb") as config:
             return cls(**tomllib.load(config))
 
     @property

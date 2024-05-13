@@ -1,2 +1,1 @@
-from .config import PyndexConfig, PyndexIndex
-from .context import *
+from .context import AppContext, Config, ConfigEntry

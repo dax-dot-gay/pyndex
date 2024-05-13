@@ -1,7 +1,7 @@
 import click
 
 
-class AliasResolver(click.Group):
+class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
         rv = click.Group.get_command(self, ctx, cmd_name)
         if rv is not None:
@@ -11,7 +11,7 @@ class AliasResolver(click.Group):
             return None
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
-        ctx.fail(f"Ambiguous match: {', '.join(sorted(matches))}")
+        ctx.fail(f"Too many matches: {', '.join(sorted(matches))}")
 
     def resolve_command(self, ctx, args):
         # always return the full command name

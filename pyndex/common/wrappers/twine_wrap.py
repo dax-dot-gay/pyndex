@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Any, Callable, Literal, cast
+import httpx
 from pydantic import BaseModel
 from twine.commands.upload import skip_upload, _make_package
 from requests.models import Response as Response
@@ -70,28 +71,43 @@ class WrappedRepo(Repository):
         data_to_send = self._convert_data_to_list_of_tuples(data)
 
         with open(package.filename, "rb") as fp:
-            data_to_send.append(
-                ("content", (package.basefilename, fp, "application/octet-stream"))
-            )
-            encoder = requests_toolbelt.MultipartEncoder(data_to_send)
-            total = encoder.len
-            monitor = requests_toolbelt.MultipartEncoderMonitor(
-                encoder,
-                lambda monitor: self.settings.on_progress(
-                    ProgressUpdate_Upload(
-                        filename=package.basefilename,
-                        completed=monitor.bytes_read,
-                        total=total,
-                    )
-                ),
-            )
 
-            resp = self.session.post(
-                self.url,
-                data=monitor,
-                allow_redirects=False,
-                headers={"Content-Type": monitor.content_type},
-            )
+            if self.settings.client:
+                resp = self.settings.client.post(
+                    self.url,
+                    data=dict(data_to_send),
+                    files={
+                        "content": (
+                            package.basefilename,
+                            fp,
+                            "application/octet-stream",
+                        )
+                    },
+                    follow_redirects=False,
+                )
+            else:
+                data_to_send.append(
+                    ("content", (package.basefilename, fp, "application/octet-stream"))
+                )
+                encoder = requests_toolbelt.MultipartEncoder(data_to_send)
+                total = encoder.len
+                monitor = requests_toolbelt.MultipartEncoderMonitor(
+                    encoder,
+                    lambda monitor: self.settings.on_progress(
+                        ProgressUpdate_Upload(
+                            filename=package.basefilename,
+                            completed=monitor.bytes_read,
+                            total=total,
+                        )
+                    ),
+                )
+
+                resp = self.session.post(
+                    self.url,
+                    data=monitor,
+                    allow_redirects=False,
+                    headers={"Content-Type": monitor.content_type},
+                )
 
         return resp
 
@@ -117,6 +133,7 @@ class WrappedSettings(Settings):
         verbose: bool = False,
         disable_progress_bar: bool = False,
         progress_callback: Callable[[ProgressUpdate], None] | None = None,
+        client: httpx.Client | None = None,
         **ignored_kwargs: Any,
     ) -> None:
         """WrappedSettings initializer
@@ -144,6 +161,7 @@ class WrappedSettings(Settings):
             **ignored_kwargs,
         )
         self.progress_callback = progress_callback
+        self.client = client
 
     def on_progress(self, update: ProgressUpdate) -> None:
         """Wrapper function that is a no-op if a callback is not defined.
@@ -178,8 +196,9 @@ def upload(
     repository_url: str | None = None,
     username: str = "",
     password: str = "",
+    client: httpx.Client | None = None,
     **kwargs,
-) -> set[str]:
+) -> set[tuple[str, str]]:
     """A library-friendly wrapper around twine.commands.upload.upload
 
     Args:
@@ -192,7 +211,7 @@ def upload(
         **kwargs (Any, optional): Additional keyword arguments to pass to Settings.
 
     Returns:
-        set[str]: Release URLs if provided
+        set[tuple[str, str]]: Set of (package name, package version) uploaded
 
     Attribution:
         Main code is attributed to https://github.com/pypa/twine/blob/48af4c1bd476334d7360ca854537116afeeffd43/twine/commands/upload.py#L94, licensed under the Apache 2.0 license.
@@ -206,6 +225,7 @@ def upload(
         disable_progress_bar=True,
         progress_callback=progress_callback,
         non_interactive=True,
+        client=client,
         **kwargs,
     )
 
@@ -244,7 +264,7 @@ def upload(
             )
 
     repository = upload_settings.create_repository()
-    uploaded_packages = []
+    uploaded_packages: list[PackageFile] = []
 
     if signatures and not packages_to_upload:
         raise exceptions.InvalidDistribution(
@@ -265,31 +285,12 @@ def upload(
             continue
 
         resp = repository.upload(package)
-        logger.info(f"Response from {resp.url}:\n{resp.status_code} {resp.reason}")
-        if resp.text:
-            logger.info(resp.text)
-
-        # Bug 92. If we get a redirect we should abort because something seems
-        # funky. The behaviour is not well defined and redirects being issued
-        # by PyPI should never happen in reality. This should catch malicious
-        # redirects as well.
-        if resp.is_redirect:
-            raise exceptions.RedirectDetected.from_args(
-                repository_url,
-                resp.headers["location"],
-            )
-
-        if skip_upload(resp, upload_settings.skip_existing, package):
-            logger.warning(skip_message)
-            continue
-
-        utils.check_status_code(resp, upload_settings.verbose)
 
         uploaded_packages.append(package)
 
-    release_urls = repository.release_urls(uploaded_packages)
+    uploaded = set([(i.safe_name, i.metadata.version) for i in uploaded_packages])
 
     # Bug 28. Try to silence a ResourceWarning by clearing the connection
     # pool.
     repository.close()
-    return release_urls
+    return uploaded

@@ -1,177 +1,148 @@
-from tempfile import NamedTemporaryFile
-from traceback import print_exc
-import rich.columns
-from rich.console import RenderResult
-import rich.markdown
-import rich.padding
-import rich.panel
-import rich.text
-from ..util import AliasResolver
-from ..models import Context
-from pyndex.common import ApiError
+from typing import Callable
 import click
-import rich
-from rich.text import Text
-from rich.layout import Layout
+from ..util import AliasedGroup
+from ..models import AppContext
 from rich.markdown import Markdown
+from rich.progress import Progress
+from ...common import ProgressUpdate
+from ...pyndex_api.util import ApiError
 
 
-@click.group("package", cls=AliasResolver)
+@click.group("package", cls=AliasedGroup)
 def package():
-    """Contains operations related to packages in the index."""
+    """Operate on individual or aggregate packages."""
     pass
 
 
-@package.command("info")
-@click.argument("package")
-@click.option("--version", "-v", "version", help="Optional package version to select")
+@package.command("list")
+@click.pass_obj
+def list_packages(obj: AppContext):
+    """List all packages accessible to the logged-in user."""
+    obj.console.print("[bold]Repositories:[/]")
+    for package in obj.client.package.all():
+        obj.console.print(
+            f"\t* [bold]{package.info.name} - {package.info.version}[/]\n"
+        )
+        obj.console.print(f"\t  [underline]Summary[/]  : {package.info.summary}")
+        obj.console.print(f"\t  [underline]Authors[/]  : {package.info.author_email}")
+        obj.console.print(
+            f"\t  [underline]Keywords[/] : {', '.join([i.strip() for i in package.info.keywords.split(',')]) if package.info.keywords else '-'}"
+        )
+
+
+@package.command("show")
+@click.argument("name")
 @click.option(
-    "--local", "local", is_flag=True, help="Whether to only show local packages"
+    "--version", "-v", "version", help="Optional version to get information about."
+)
+@click.option(
+    "--local",
+    "-l",
+    "local",
+    is_flag=True,
+    help="Whether to only retrieve results from the local index.",
+)
+@click.option(
+    "--describe/--no-describe",
+    "describe",
+    default=False,
+    help="Whether to include full text of markdown description.",
+)
+@click.option(
+    "--files/--no-files",
+    "files",
+    default=False,
+    help="Whether to list associated files.",
 )
 @click.pass_obj
-def package_info(
-    obj: Context, package: str, version: str | None = None, local: bool = False
+def show_package(
+    obj: AppContext,
+    name: str,
+    version: str | None,
+    local: bool,
+    describe: bool,
+    files: bool,
 ):
-    """
-    Fetches information about PACKAGE, optionally constrained to VERSION. If --local isn't set, will return results from external proxies if the package isn't found locally.
-    """
-    with obj.index() as index:
-        info = index.get_package(package, version=version, allow_proxy=not local)
-        if not info:
-            obj.console.print(
-                f"[bold red]Error:[/bold red] No package matching {package} (version {version if version else 'ANY'}) was found."
-            )
-            raise click.Abort()
+    """Show detailed information about a specific package by NAME"""
 
-        # Define header components
-        header_content = Layout()
-        dynamic_height = 0
-
-        # Classifier height check
-        class_cols = obj.console.width // max([len(i) for i in info.info.classifiers])
-        class_height = len(info.info.classifiers) // class_cols + 2
-
-        header_content.split_column(
-            Layout(
-                renderable=Text.assemble(
-                    Text.from_markup(
-                        f"[bold]Summary:[/bold] {info.info.summary if info.info.summary else 'N/A'}\n"
-                    ),
-                    Text.from_markup(
-                        f"[bold]License:[/bold] {info.info.license if info.info.license else 'N/A'}\n"
-                    ),
-                    Text.from_markup(
-                        f"[bold]Python Version:[/bold] {info.info.requires_python if info.info.requires_python else 'N/A'}\n"
-                    ),
-                ),
-                name="summary",
-                size=4,
-            ),
-            Layout(
-                name="attribution",
-                size=(
-                    (
-                        len(info.info.author_email.split(", "))
-                        if info.info.author_email
-                        else 0
-                    )
-                    if (
-                        len(info.info.author_email.split(", "))
-                        if info.info.author_email
-                        else 0
-                    )
-                    > (
-                        len(info.info.maintainer_email.split(", "))
-                        if info.info.maintainer_email
-                        else 0
-                    )
-                    else (
-                        len(info.info.maintainer_email.split(", "))
-                        if info.info.maintainer_email
-                        else 0
-                    )
-                )
-                + 2,
-            ),
-            Layout(name="urls", size=len(info.info.project_urls) + 2),
-            Layout(name="classifiers", size=class_height),
-        )
-
-        # summary height
-        dynamic_height += 4
-
-        header_content["attribution"].split_row(
-            Text.from_markup(
-                f"[bold]Authors:[/bold]\n    {'\n    '.join(info.info.author_email.split(', '))}\n"
-                if info.info.author_email
-                else "[bold]Authors:[/] N/A"
-            ),
-            Text.from_markup(
-                f"[bold]Maintainers:[/bold]\n    {'\n    '.join(info.info.maintainer_email.split(', '))}"
-                if info.info.maintainer_email
-                else "[bold]Maintainers:[/] N/A"
-            ),
-        )
-
-        # attr height
-        dynamic_height += (
-            (len(info.info.author_email.split(", ")) if info.info.author_email else 0)
-            if (
-                len(info.info.author_email.split(", ")) if info.info.author_email else 0
-            )
-            > (
-                len(info.info.maintainer_email.split(", "))
-                if info.info.maintainer_email
-                else 0
-            )
-            else (
-                len(info.info.maintainer_email.split(", "))
-                if info.info.maintainer_email
-                else 0
-            )
-        ) + 2
-
-        header_content["urls"].update(
-            Text.from_markup(
-                f"[bold]URLs:[/bold]\n    {'\n    '.join([('[italic]' + i.split(':', maxsplit=1)[0] + ':[/italic] ' + i.split(':', maxsplit=1)[1]) if ':' in i else i for i in info.info.project_urls])}"
-            ),
-        )
-
-        # url height
-        dynamic_height += len(info.info.project_urls) + 2
-
-        # classifier height
-        dynamic_height += class_height
-        header_content["classifiers"].update(
-            rich.console.Group(
-                Text.from_markup("[bold]Classifiers:[/bold]"),
-                rich.columns.Columns(
-                    renderables=info.info.classifiers,
-                    padding=(0, 2),
-                    equal=True,
-                    expand=True,
-                    width=max([len(i) for i in info.info.classifiers]) + 2,
-                ),
-            )
-        )
-
-        header = rich.padding.Padding(
-            rich.panel.Panel(
-                header_content,
-                title=f"{info.info.name} - v{info.info.version}",
-                title_align="left",
-                height=dynamic_height + 2,
-            ),
-            1,
-        )
-        obj.console.print(header)
+    package = obj.client.package(name, version=version, local=local)
+    if package:
         obj.console.print(
-            rich.panel.Panel(
-                (
-                    Markdown(info.info.description)
-                    if info.info.description
-                    else "[italic]No description...[/italic]"
-                ),
-                title="Description",
-            )
+            f"[bold]Found [underline]{'Local' if package.local else 'Remote'}[/underline] Package:[/] {package.info.name} v{package.info.version}\n"
         )
+        obj.console.print(f"\t  [underline]Summary[/]        : {package.info.summary}")
+        obj.console.print(
+            f"\t  [underline]Authors[/]        : {package.info.author_email}"
+        )
+        obj.console.print(
+            f"\t  [underline]Python Version[/] : {package.info.requires_python if package.info.requires_python else '-'}"
+        )
+        obj.console.print(
+            f"\t  [underline]Keywords[/]       : {', '.join([i.strip() for i in package.info.keywords.split(',')]) if package.info.keywords else '-'}"
+        )
+        obj.console.print(
+            f"\t  [underline]Classifiers[/]    : {'\n\n\t    * ' + '\n\t    * '.join(package.info.classifiers) if package.info.classifiers else '-'}"
+        )
+        if describe:
+            obj.console.print(
+                f"\t  [underline]Description[/]    : {'\n' if package.info.description else '-'}"
+            )
+            if package.info.description:
+                obj.console.print(Markdown(package.info.description))
+
+        if files:
+            pkg_files = package.get_files()
+            obj.console.print(
+                f"\t  [underline]Files[/]          : {'\n' if len(pkg_files) > 0 else '-'}"
+            )
+            if len(pkg_files) > 0:
+                max_name = max([len(i.filename) for i in pkg_files])
+                for file in pkg_files:
+                    obj.console.print(
+                        f"\t    * {file.filename}:{' ' * (max_name - len(file.filename) + 1)}[blue italic]{file.url}[/]"
+                    )
+
+    else:
+        obj.error("Failed to resolve package.")
+
+
+@package.command("upload")
+@click.option(
+    "--dist",
+    "-d",
+    "dists",
+    multiple=True,
+    help="Paths to dist folders (ie dist/*) to upload. Can be specified multiple times.",
+)
+@click.pass_obj
+def upload_package(obj: AppContext, dists: tuple[str]):
+    """Upload package(s) to the index."""
+
+    def progress_tracker(
+        dist: str, progress_bar: Progress, tasks: dict[str, int]
+    ) -> Callable[[ProgressUpdate], None]:
+        def _track(progress: ProgressUpdate):
+            if not progress.filename in tasks.keys():
+                tasks[progress.filename] = progress_bar.add_task(
+                    f"Uploading {progress.filename} from {dist}..."
+                )
+
+            if progress.action == "upload":
+                progress_bar.update(
+                    tasks[progress.filename],
+                    total=progress.total,
+                    completed=progress.completed,
+                )
+
+        return _track
+
+    for dist in dists:
+        obj.console.print(f"Uploading {dist} to {obj.repo.name} ({obj.repo.host})")
+        with Progress() as progress:
+            tasks = {}
+            try:
+                obj.client.package.upload(
+                    dist, on_progress=progress_tracker(dist, progress, tasks)
+                )
+            except:
+                obj.error(f"Failed to upload {dist}.")

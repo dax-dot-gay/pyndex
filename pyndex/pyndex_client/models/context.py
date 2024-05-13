@@ -1,46 +1,82 @@
 from contextlib import contextmanager
+import json
+import os
 from typing import Any, Generator
+import click
 from pydantic import BaseModel
-import rich
-from .config import PyndexConfig, PyndexIndex
-from pyndex.common import Pyndex
+from ...pyndex_api import Pyndex
+from rich.console import Console
 
 
-class Context(BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-    repo_override: str | None = None
-    verbosity: int = 0
-    config_file_path: str
-    config: PyndexConfig
-    console: rich.console.Console
+class ConfigEntry(BaseModel):
+    name: str
+    host: str
+    base_url: str | None = None
+    username: str | None = None
+    password: str | None = None
 
-    @property
-    def repo(self) -> PyndexIndex | None:
-        if self.repo_override:
-            try:
-                return self.config.index[self.repo_override]
-            except KeyError:
-                return None
+
+class Config(BaseModel):
+    _file: str
+    repositories: dict[str, ConfigEntry] = {}
+    default: str | None = None
+
+    def __init__(self, file: str, **data):
+        super().__init__(**data)
+        self._file = file
+
+    @classmethod
+    def load(cls, path: str) -> "Config":
+        if path == "-" or os.path.exists(path):
+            with click.open_file(path) as f:
+                return Config(path, **json.load(f))
 
         else:
-            if not self.config.default:
-                return None
-            try:
-                return self.config.index[self.config.default]
-            except KeyError:
-                return None
+            return Config(path)
 
+    def save(self) -> None:
+        if self._file != "-":
+            with click.open_file(self._file, "w") as f:
+                f.write(self.model_dump_json(indent=4))
+
+
+class AppContext(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+    repo: ConfigEntry | None
+    config: Config
+    client: Pyndex | None
+    console: Console
+
+    @classmethod
     @contextmanager
-    def index(self) -> Generator[Pyndex | None, Any, None]:
-        repo = self.repo
+    def create(
+        cls, config_path: str, repository: str | None = None
+    ) -> Generator["AppContext", Any, Any]:
+        config = Config.load(config_path)
+        repo = (
+            config.repositories[repository]
+            if repository
+            else (config.repositories[config.default] if config.default else None)
+        )
         if repo:
             with Pyndex(
-                repo.url,
+                repo.host,
+                api_base=repo.base_url,
                 username=repo.username,
-                password=repo.password,
-                token=repo.token,
-            ) as index:
-                yield index
-
+                password=repo.username,
+            ).session() as index:
+                yield AppContext(
+                    repo=repo,
+                    config=config,
+                    client=index,
+                    console=Console(highlight=False),
+                )
         else:
-            yield None
+            yield AppContext(
+                repo=None, config=config, client=None, console=Console(highlight=False)
+            )
+
+        config.save()
+
+    def error(self, message: str):
+        self.console.print(f"[bold red]Error:[/bold red] {message}")

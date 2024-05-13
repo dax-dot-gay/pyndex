@@ -1,7 +1,4 @@
-from . import FEATURES
+from .pyndex_client import main
 
-if "client" in FEATURES:
-    from .pyndex_client import main
-
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()

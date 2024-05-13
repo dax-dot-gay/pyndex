@@ -2,10 +2,10 @@ import base64
 from httpx import Request
 from litestar import Router
 from litestar.di import Provide
-from .pypi import PypiController
 from .files import FilesController
-from .packages import PackagesController
-from .meta import *
+from .packages import PackageController
+from .user import UserController, RedactedAuth, UserQueryController, UserSelfController
+from .group import GroupController, SpecificGroupController
 from ..context import Context
 from ..models import AuthUser, AuthToken, AuthAdmin, get_authentication
 from litestar.connection import ASGIConnection
@@ -14,6 +14,11 @@ from litestar.handlers.base import BaseRouteHandler
 
 
 async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+    """Checks if the current connection is authenticated, assuming that authentication is active.
+
+    Args:
+        connection (ASGIConnection): ASGI connection object
+    """
     context: Context = connection.app.state.context
     if context.config.features.auth:
         if not connection.headers.get("authorization", None):
@@ -82,19 +87,37 @@ async def guard_authenticated(connection: ASGIConnection, _: BaseRouteHandler) -
 async def provide_authentication(
     request: Request, context: Context
 ) -> AuthUser | AuthToken | AuthAdmin | None:
+    """Provides the currently authenticated user, or None if anonymous
+
+    Args:
+        request (Request): HTTP request object
+        context (Context): Application context
+
+    Returns:
+        AuthUser | AuthToken | AuthAdmin | None: Active authenticated user/token
+    """
     return get_authentication(request, context)
 
 
 def make_api_router(base: str) -> Router:
+    """Creates the main application routing at a dynamic base URL
+
+    Args:
+        base (str): Base URL to prepend
+
+    Returns:
+        Router: Litestar Router
+    """
     return Router(
         base,
         route_handlers=[
-            PypiController,
             FilesController,
-            PackagesController,
-            MetaUserController,
-            MetaAdminController,
-            MetaGroupController,
+            PackageController,
+            UserController,
+            UserSelfController,
+            UserQueryController,
+            GroupController,
+            SpecificGroupController,
         ],
         guards=[guard_authenticated],
         dependencies={"auth": Provide(provide_authentication)},

@@ -1,60 +1,52 @@
-import logging
 import os
 import click
 import platformdirs
-from .models import *
+from .models import AppContext
+from ..version import *
+from .util import AliasedGroup
 from .commands import *
-from .util import *
+import logging
 
-logging.getLogger("httpx").disabled = True
+logging.getLogger("httpx").setLevel(logging.CRITICAL)
 
 
-@click.group(invoke_without_command=True, cls=AliasResolver)
+@click.group(invoke_without_command=True, cls=AliasedGroup)
+@click.option(
+    "--repo", "-r", "repo", default=None, help="Override of default repository."
+)
 @click.option(
     "--config",
     "-c",
     "config",
     default=None,
-    type=click.Path(resolve_path=True, dir_okay=False),
-    help="Path to an existing config file. Defaults to "
-    + os.path.join(platformdirs.user_config_dir(appname="pyndex"), "pyndex.conf"),
-)
-@click.option(
-    "--verbose",
-    "-v",
-    count=True,
-    help="Desired verbosity of output. Can be specified multiple times for increased verbosity (ie -vvv)",
-)
-@click.option(
-    "--repo",
-    "-r",
-    default=None,
-    help="Pyndex instance name to override configured default.",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, allow_dash=True),
+    help="Override for config file location. Defaults to "
+    + os.path.join(platformdirs.user_config_dir(appname="pyndex"), "pyndex.json"),
 )
 @click.pass_context
-def main(ctx: click.Context, config: str | None, verbose: int, repo: str):
-    if config:
-        config_path = config
-    else:
-        config_path = os.path.join(
-            platformdirs.user_config_dir(appname="pyndex"), "pyndex.conf"
+def main(ctx: click.Context, repo: str | None, config: str | None):
+    ctx.obj = ctx.with_resource(
+        AppContext.create(
+            (
+                config
+                if config
+                else os.path.join(
+                    platformdirs.user_config_dir(appname="pyndex"), "pyndex.json"
+                )
+            ),
+            repository=repo,
         )
-
-    if not os.path.exists(config_path):
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        PyndexConfig().save(config_path)
-
-    cfg = PyndexConfig.from_file(config_path)
-    ctx.obj = Context(
-        verbosity=verbose,
-        config_file_path=config_path,
-        config=cfg,
-        repo_override=repo,
-        console=rich.console.Console(highlighter=None),
     )
-
+    if ctx.invoked_subcommand == None:
+        ctx.obj.console.print(f"[bold]Pyndex - v{__version__}")
+        ctx.obj.console.print(f"[bold]\tCLI Version:[/] v{__client_version__}")
+        ctx.obj.console.print(f"[bold]\tAPI Version:[/] v{__api_version__}")
+    else:
+        if ctx.invoked_subcommand != "connection" and not ctx.obj.client:
+            ctx.obj.error("No connection is configured/active.")
 
 main.add_command(connection)
+main.add_command(package)
 main.add_command(user)
 main.add_command(group)
-main.add_command(package)
+main.add_command(perms)
