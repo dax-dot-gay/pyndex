@@ -48,3 +48,4 @@ def main(ctx: click.Context, repo: str | None, config: str | None):
 main.add_command(connection)
 main.add_command(package)
 main.add_command(user)
+main.add_command(group)
