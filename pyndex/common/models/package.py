@@ -34,6 +34,7 @@ class PackageInfo(BaseModel):
     @field_validator("classifiers", "project_urls", "requires_dist", mode="before")
     @classmethod
     def ensure_list(cls, v: str | list[str] | dict[str, str]) -> list[str]:
+        """Validates values to ensure they follow a standard format"""
         if type(v) == str:
             return [v]
         if type(v) == dict:
@@ -68,6 +69,7 @@ class PackageUrl(BaseModel):
 
     @classmethod
     def from_meta(cls, meta: FileMetadata, url_base: str) -> "PackageUrl":
+        """Generates from a FileMetadata object"""
         return PackageUrl(
             comment_text=meta.comment,
             digests=PackageDigests(
@@ -111,6 +113,7 @@ class PackageFileDetail(BaseModel):
 
     @classmethod
     def from_meta(cls, meta: FileMetadata, url_base: str) -> "PackageFileDetail":
+        """Generates from a FileMetadata object"""
         return PackageFileDetail(
             filename=meta.filename,
             url=f"{url_base}/files/{meta.name}/{meta.version}/{meta.filename}",
@@ -143,6 +146,20 @@ class Package(BaseModel):
         version: Optional[str] = None,
         url_base: str = "http://localhost:8000",
     ) -> "Package":
+        """Generates a Package object from a package path
+
+        Args:
+            package_path (str): Package path
+            version (Optional[str], optional): Package version. Defaults to None.
+            url_base (str, optional): URL base for downloads. Defaults to "http://localhost:8000".
+
+        Raises:
+            KeyError: Raised if version is unknown
+
+        Returns:
+            Package: Assembled Package
+        """
+
         # Order version & select requested/latest
         version_paths = {
             ver: os.path.join(package_path, ver) for ver in os.listdir(package_path)
@@ -169,6 +186,14 @@ class Package(BaseModel):
         )
 
     def detail(self, url_base: str = "http://localhost:8000") -> PackageDetail:
+        """Returns package file detail
+
+        Args:
+            url_base (str, optional): File download base URL. Defaults to "http://localhost:8000".
+
+        Returns:
+            PackageDetail: Generated PackageDetail object
+        """
         all_metas = []
         for version, metas in self.versions:
             all_metas.extend(metas)

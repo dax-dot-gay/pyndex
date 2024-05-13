@@ -76,8 +76,16 @@ class FileMetadata(BaseModel):
         return os.path.join(self.name, self.version)
 
     async def save(self, index: str) -> None:
+        """Saves metadata to sidecar file
+
+        Args:
+            index (str): Index root folder
+
+        Raises:
+            FileExistsError: Raised if the version already exists or if no content was provided.
+        """
         if not self.content:
-            raise FileExistsError("Cannot overwrite an existing version.")
+            raise FileExistsError("No content was provided")
 
         if os.path.exists(os.path.join(index, self.index_path)):
             raise FileExistsError("Cannot overwrite an existing version.")
@@ -92,6 +100,14 @@ class FileMetadata(BaseModel):
 
     @classmethod
     def get_files(cls, path: str) -> list["FileMetadata"]:
+        """Gets all file metadata associated with a package version
+
+        Raises:
+            FileNotFoundError: Raised if the package is unknown
+
+        Returns:
+            list[FileMetadata]: List of file metadata
+        """
         if not os.path.exists(path):
             raise FileNotFoundError(f"Package directory '{path}' does not exist.")
 
@@ -106,6 +122,7 @@ class FileMetadata(BaseModel):
         return results
 
     def as_metadata(self) -> str:
+        """Converts to PYPA metadata format"""
         output = ""
         for key, value in self.model_dump(
             mode="json", exclude={"index_path", "metadata_path", "index_dir"}
