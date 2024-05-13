@@ -45,11 +45,13 @@ def perms(ctx: click.Context):
         case_sensitive=False,
     ),
     help="""Which permission to add to the selected user/group:
- - server:admin  : Allow all server & package operations.
- - server:create : Allow package creation.
- - pkg:manage    : Allow administration of a package (--package must be specified)
- - pkg:edit      : Allow uploading new versions of a package (--package must be specified)
- - pkg:view      : Allow administration of a package (--package must be specified)""",
+
+\b
+- server:admin  : Allow all server & package operations.
+- server:create : Allow package creation.
+- pkg:manage    : Allow administration of a package (--package must be specified)
+- pkg:edit      : Allow uploading new versions of a package (--package must be specified)
+- pkg:view      : Allow administration of a package (--package must be specified)""",
 )
 @click.option(
     "-k", "--package", "package", help="Package to add a package permission to."
@@ -118,11 +120,13 @@ def add_permission(
         case_sensitive=False,
     ),
     help="""Which permission to remove from the selected user/group:
- - server:admin  : Allow all server & package operations.
- - server:create : Allow package creation.
- - pkg:manage    : Allow administration of a package (--package must be specified)
- - pkg:edit      : Allow uploading new versions of a package (--package must be specified)
- - pkg:view      : Allow administration of a package (--package must be specified)""",
+
+\b
+- server:admin  : Allow all server & package operations.
+- server:create : Allow package creation.
+- pkg:manage    : Allow administration of a package (--package must be specified)
+- pkg:edit      : Allow uploading new versions of a package (--package must be specified)
+- pkg:view      : Allow administration of a package (--package must be specified)""",
 )
 @click.option(
     "-k",
