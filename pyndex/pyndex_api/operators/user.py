@@ -19,6 +19,11 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
         self._operator = operator
 
     def delete(self) -> None:
+        """Deletes UserItem. All users are allowed to delete their own accounts, but only users with admin permissions can delete other users.
+
+        Raises:
+            ApiError.from_response: Raised if deletion fails.
+        """
         if self.current:
             result = self.client.delete(self.url("users", "self"))
             if not result.is_success:
@@ -30,6 +35,17 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
                 raise ApiError.from_response(result)
 
     def add_permission(self, spec: PermissionSpecModel) -> list[PermissionSpecModel]:
+        """Adds a permission to the user
+
+        Args:
+            spec (PermissionSpecModel): Permission specification model
+
+        Raises:
+            ApiError.from_response: Raised if adding the permission fails
+
+        Returns:
+            list[PermissionSpecModel]: List of permissions held by this user
+        """
         result = self.client.post(
             self.url("users", "id", self.id, "permissions"),
             json=spec.model_dump(mode="json"),
@@ -41,16 +57,29 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
     def add_server_permission(
         self, permission: MetaPermission
     ) -> list[PermissionSpecModel]:
+        """Utility function to add a server permission in a simple way"""
         return self.add_permission(PermissionSpecModel(permission=permission))
 
     def add_package_permission(
         self, permission: PackagePermission, package: str
     ) -> list[PermissionSpecModel]:
+        """Utility function to add a package permission in a simple way"""
         return self.add_permission(
             PermissionSpecModel(permission=permission, project=package)
         )
 
     def get_permissions(self, project: str | None = None) -> list[PermissionSpecModel]:
+        """Gets all of a user's permissions, optionally associated with a specific project
+
+        Args:
+            project (str | None, optional): Project name. Defaults to None.
+
+        Raises:
+            ApiError.from_response: Raised if returning permissions fails
+
+        Returns:
+            list[PermissionSpecModel]: List of permissions. If `project` is specified, only permissions associated with that project will be returned.
+        """
         if project:
             result = self.client.get(
                 self.url("users", "id", self.id, "permissions", project)
@@ -62,6 +91,17 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
         raise ApiError.from_response(result)
 
     def delete_permission(self, spec: PermissionSpecModel) -> list[PermissionSpecModel]:
+        """Deletes a permission based on a specification model
+
+        Args:
+            spec (PermissionSpecModel): Permission query specification
+
+        Raises:
+            ApiError.from_response: Raised if removing permission fails
+
+        Returns:
+            list[PermissionSpecModel]: Returns new list of permissions
+        """
         result = self.client.post(
             self.url("users", "id", self.id, "permissions", "delete"),
             json=spec.model_dump(mode="json"),
@@ -73,11 +113,13 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
     def delete_server_permission(
         self, permission: MetaPermission
     ) -> list[PermissionSpecModel]:
+        """Utility function to delete server permissions"""
         return self.delete_permission(PermissionSpecModel(permission=permission))
 
     def delete_package_permission(
         self, permission: PackagePermission, package: str
     ) -> list[PermissionSpecModel]:
+        """Utility function to delete package permissions"""
         return self.delete_permission(
             PermissionSpecModel(permission=permission, project=package)
         )
@@ -85,6 +127,16 @@ class UserItem(RedactedAuth, BaseOperatorModel["UserOperator"]):
     def change_password(
         self, current_password: str | None, new_password: str | None
     ) -> None:
+        """Change the password of the current user
+
+        Args:
+            current_password (str | None): Current password (or None if no password)
+            new_password (str | None): New password (or None if no password)
+
+        Raises:
+            RuntimeError: Raised if attempting to change non-current user password
+            ApiError.from_response: Raised if password change fails
+        """
         if not self.current:
             raise RuntimeError("Cannot change password of non-current user")
         result = self.client.post(

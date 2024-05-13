@@ -41,6 +41,7 @@ class PackageItem(Package, BaseOperatorModel["PackageOperator"]):
 
 
 class LazyPackageList:
+    """Iterator wrapper to allow lazy loading of package data due to potentially large payloads"""
     def __init__(self, names: list[str], operator: "PackageOperator") -> None:
         self.names = names
         self.operator = operator
