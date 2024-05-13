@@ -38,19 +38,28 @@ TOperator = TypeVar("TOperator", bound=BaseOperator)
 
 class BaseOperatorModel[TOperator]:
     def __init__(self, operator: TOperator = None):
+        """Represents base functionality of operator sub-items
+
+        Args:
+            operator (TOperator, optional): Operator object to reference. Defaults to None.
+        """
         self._operator = operator
 
     @property
     def operator(self) -> TOperator:
+        """Convenience function to return the model's operator"""
         return self._operator
 
     @property
     def instance(self) -> BaseInstance:
+        """Convenience function to return the model's API instance reference"""
         return self._operator.instance
 
     @property
     def client(self) -> Client:
+        """Convenience function to return the model's HTTPX client"""
         return self._operator.client
 
     def url(self, *parts) -> str:
+        """Convenience function wrapping operator's url() function"""
         return self._operator.url(*parts)
