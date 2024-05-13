@@ -11,6 +11,18 @@ class BaseInstance:
         password: str | None = None,
         api_token: str | None = None,
     ):
+        """API instance object
+
+        Args:
+            host (str): Pyndex server URL
+            api_base (str, optional): Base URL on server. Defaults to "/".
+            username (str | None, optional): Username to login as. Defaults to None.
+            password (str | None, optional): User password. Defaults to None.
+            api_token (str | None, optional): API token (currently not implemented). Defaults to None.
+
+        Raises:
+            ValueError: Raised if arguments are provided incorrectly
+        """
         if username and api_token:
             raise ValueError("Cannot set username & api token simultaneously")
 
@@ -28,6 +40,14 @@ class BaseInstance:
         self.devmode = False
 
     def url(self, *parts: str) -> str:
+        """Generates a formatted URL from API parameters
+
+        Args:
+            *parts (str): Any number of path segments to add to the final URL
+
+        Returns:
+            str: Formatted URL
+        """
         return "/".join(
             [
                 i.strip("/")
@@ -37,6 +57,11 @@ class BaseInstance:
         )
 
     def connect(self, client: Client | None = None):
+        """Connect to API. If Client is passed, instead use that.
+
+        Args:
+            client (Client | None, optional): Pre-created HTTPX client, mostly for testing purposes.. Defaults to None.
+        """
         self.client = (
             client
             if client
@@ -51,6 +76,7 @@ class BaseInstance:
             self.devmode = False
 
     def disconnect(self):
+        """Disconnects from client"""
         if self.client and not self.client.is_closed:
             try:
                 self.client.close()
@@ -63,16 +89,36 @@ class ApiError(RuntimeError):
     def __init__(
         self, status_code: int, url: str, detail: str | None, *args: object
     ) -> None:
+        """Extension of Exception initializer
+
+        Args:
+            status_code (int): HTTP status code
+            url (str): Request URL
+            detail (str | None): Error detail info
+        """
         super().__init__(*args)
         self.status_code = status_code
         self.url = url
         self.detail = detail
 
     def __str__(self) -> str:
+        """Formats the error with request info
+
+        Returns:
+            str: Formatted error
+        """
         return f"Failed to call {self.url}: Error {self.status_code}{'\n\tReason: ' + self.detail if self.detail else ''}"
 
     @classmethod
     def from_response(cls, response: Response) -> "ApiError":
+        """Constructs an APIError from an HTTPX response
+
+        Args:
+            response (Response): HTTPX response
+
+        Returns:
+            ApiError: Constructed APIError
+        """
         try:
             detail = response.json()["detail"]
         except:
