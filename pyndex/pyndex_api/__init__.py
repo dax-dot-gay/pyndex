@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from typing import Any, Generator
 
 from httpx import Client
-from .util import BaseInstance
+from .util import BaseInstance, ApiError
 from .operators import *
 
 
