@@ -34,3 +34,10 @@ class TestPackageFormat:
             successful3 = index.package("pyndex")
             assert successful3 != None
             assert successful3.info.name == "pyndex"
+
+    @pytest.mark.parametrize(["package", "local"], [("pyndex", True)])
+    def test_package(self, as_admin: Pyndex, package: str, local: bool):
+        result = as_admin.package(package)
+        assert result != None
+        assert result.info.name == package
+        assert result.local == local
