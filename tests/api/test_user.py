@@ -55,6 +55,7 @@ class TestSelf:
 @pytest.mark.group(
     name="admins", display_name="Administrators", server_permissions=["meta.admin"]
 )
+@pytest.mark.package(dist="./dist/*", username="admin", password="admin")
 @pytest.mark.parametrize(
     ["username"],
     [("alice",), ("bob",), ("linus",)],
@@ -73,3 +74,15 @@ class TestUsers:
         result = as_admin.users.create(username + "_test", password=username)
         assert result.name == username + "_test"
         assert result.name in [i.name for i in as_admin.users.all()]
+
+    def test_perm_manage(self, as_admin: Pyndex, username: str):
+        results = as_admin.users(username=username).add_package_permission(
+            "pkg.view", "pyndex"
+        )
+        assert "pkg.view" in [i.permission for i in results]
+        results = as_admin.users(username=username).get_permissions(project="pyndex")
+        assert "pkg.view" in [i.permission for i in results]
+        results = as_admin.users(username=username).delete_package_permission(
+            "pkg.view", "pyndex"
+        )
+        assert not "pkg.view" in [i.permission for i in results]
