@@ -63,3 +63,13 @@ class TestUsers:
     def test_query(self, username: str, as_admin: Pyndex):
         user = as_admin.users(username=username)
         assert user.name == username
+
+    def test_all(self, as_admin: Pyndex, username: str):
+        results = as_admin.users.all()
+        assert len(results) == 4
+        assert username in [i.name for i in results]
+
+    def test_create(self, as_admin: Pyndex, username: str):
+        result = as_admin.users.create(username + "_test", password=username)
+        assert result.name == username + "_test"
+        assert result.name in [i.name for i in as_admin.users.all()]
