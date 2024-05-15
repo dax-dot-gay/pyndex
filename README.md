@@ -32,7 +32,7 @@ Self-hosted pypi-compatible package index with deep package access permissioning
 
 ## Installation
 
---WIP--
+Execute `python -m pip install py-pyndex[server,client]`. The `server` extra adds the dependencies required for server usage, and the `client` extra adds dependencies required for the CLI.
 
 ## Usage
 
