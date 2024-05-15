@@ -7,6 +7,7 @@ FEATURES = []
 
 try:
     from .pyndex_server import app as server
+    from .pyndex_server.cli import launch as launch_server
 
     FEATURES.append("server")
 except ImportError:

@@ -7,11 +7,11 @@ name = "pyndex"
 version = "0.0.1"
 dependencies = [
     "twine",
-    "build",
     "pydantic",
     "httpx",
     "validators",
-    "tomlkit"
+    "tomlkit",
+    "click"
 ]
 requires-python = ">=3.12"
 authors = [
@@ -41,7 +41,6 @@ server = [
     "pyhumps"
 ]
 client = [
-    "click",
     "rich",
     "platformdirs"
 ]
@@ -52,6 +51,10 @@ test = [
 [project.urls]
 Homepage = "https://github.com/iTecAI/pyndex"
 Repository = "https://github.com/iTecAI/pyndex.git"
+
+[project.scripts]
+pyndex = "pyndex:pyndex_client"
+pyndex-server = "pyndex:launch_server"
 
 [tool.pytest.ini_options]
 markers = [
