@@ -18,8 +18,8 @@ class FileMetadata(BaseModel):
     metadata_version: str
     name: str
     version: str
-    platform: Optional[list[str] | str] = None
-    supported_platform: Optional[list[str] | str] = None
+    platform: Optional[list[str]] = None
+    supported_platform: Optional[list[str]] = None
     summary: Optional[str] = None
     description: Optional[str] = None
     description_content_type: Optional[str] = None
@@ -31,17 +31,17 @@ class FileMetadata(BaseModel):
     maintainer: Optional[str] = None
     maintainer_email: Optional[str] = None
     license: Optional[str] = None
-    classifiers: Optional[list[str] | str] = None
-    requires_dist: Optional[list[str] | str] = None
+    classifiers: Optional[list[str]] = None
+    requires_dist: Optional[list[str]] = None
     requires_python: Optional[str] = None
-    requires_external: Optional[list[str] | str] = None
-    project_url: Optional[list[str] | str] = None
-    project_urls: Optional[list[str] | str] = None
-    provides_dist: Optional[list[str] | str] = None
-    obsoletes_dist: Optional[list[str] | str] = None
-    provides: Optional[list[str] | str] = None
-    requires: Optional[list[str] | str] = None
-    obsoletes: Optional[list[str] | str] = None
+    requires_external: Optional[list[str]] = None
+    project_url: Optional[list[str]] = None
+    project_urls: Optional[list[str]] = None
+    provides_dist: Optional[list[str]] = None
+    obsoletes_dist: Optional[list[str]] = None
+    provides: Optional[list[str]] = None
+    requires: Optional[list[str]] = None
+    obsoletes: Optional[list[str]] = None
     comment: Optional[str] = None
     action: str = Field(validation_alias=":action", default="file_upload")
     protocol_version: int
@@ -117,7 +117,8 @@ class FileMetadata(BaseModel):
             if not name.endswith(".json"):
                 if name + ".json" in names:
                     with open(os.path.join(path, name + ".json"), "r") as f:
-                        results.append(FileMetadata(**json.load(f)))
+                        data = json.load(f)
+                        results.append(FileMetadata(**data))
 
         return results
 
